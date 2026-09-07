@@ -179,11 +179,12 @@ export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                 <h1 className="font-semibold text-surface-900">SMAP</h1>
                 <p className="text-xs text-surface-500">DMaaST Platform</p>
                 {/* Hangi use case icin acildigi — Işıl karari 2026-08-30 */}
+                {/* Yalnizca kisa ad — ERP adi (IFS/Clipper) gosterilmez. Isıl karari 2026-09-07 */}
                 <span
                   className={`mt-1 inline-block rounded-full border px-2 py-0.5 text-[10px] font-semibold ${companyConfig.accent}`}
-                  title={`${companyConfig.fullName} — ${companyConfig.erp}`}
+                  title={companyConfig.fullName}
                 >
-                  {companyConfig.fullName}
+                  {companyConfig.label}
                 </span>
               </div>
             </div>
@@ -200,9 +201,9 @@ export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
         </div>
 
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          {/* Dashboard - visible to all */}
+          {/* Dashboard - visible to all. Kok (/) artik dagitici, icerik burada. */}
           <NavItem
-            to="/"
+            to="/dashboard"
             icon={<LayoutDashboard className="w-5 h-5" />}
             label={t('nav.dashboard')}
             onNavigate={handleNavigate}

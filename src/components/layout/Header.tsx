@@ -1,8 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
-import { Bell, Search, ChevronDown, RefreshCw, Globe2 } from 'lucide-react';
+import { Bell, Search, ChevronDown, RefreshCw, Globe2, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getCompanyAlerts } from '../../data/alerts';
-import { useCompany } from '../../contexts/CompanyContext';
+import {
+  useCompany,
+  useActiveCompany,
+  COMPANIES,
+  ALL_COMPANIES,
+} from '../../contexts/CompanyContext';
+import { useAuth, isGlobalAdmin } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import SystemStatus from '../shared/SystemStatus';
 import Tooltip from '../shared/Tooltip';
@@ -29,7 +35,13 @@ export default function Header({ title, subtitle }: HeaderProps) {
   const navigate = useNavigate();
   const { language, setLanguage, t } = useLanguage();
   const { company } = useCompany();
+  const { activeCompany, setActiveCompany, canSwitchCompany } = useActiveCompany();
+  const { currentUser } = useAuth();
   const unacknowledgedAlerts = getCompanyAlerts(company).filter(a => !a.acknowledged).length;
+
+  // Panele gecis dugmesi de firma secici de YALNIZCA `scope: 'global'` hesaba
+  // gorunur — normal admin uygulama tarafina zaten hic dusmez.
+  const isSuper = isGlobalAdmin(currentUser);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -53,6 +65,44 @@ export default function Header({ title, subtitle }: HeaderProps) {
         </div>
 
         <div className="flex items-center gap-2 lg:gap-4">
+          {/* Aktif use case secici — iki firma ustu yonetici icin (WO-003 I2) */}
+          {canSwitchCompany && (
+            <div
+              className="flex items-center rounded-lg border border-surface-200 p-0.5"
+              role="group"
+              aria-label="Active use case"
+            >
+              {ALL_COMPANIES.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setActiveCompany(c)}
+                  aria-pressed={activeCompany === c}
+                  className={`rounded-md px-2.5 py-1.5 text-sm font-semibold transition-colors ${
+                    activeCompany === c
+                      ? COMPANIES[c].accent
+                      : 'text-surface-500 hover:bg-surface-50'
+                  }`}
+                >
+                  {COMPANIES[c].label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Uygulamadan panele gecis — panelde de geri donus dugmesi var */}
+          {isSuper && (
+            <Tooltip content="Admin panel" position="bottom">
+              <button
+                onClick={() => navigate('/admin')}
+                className="flex items-center gap-1.5 rounded-lg border border-surface-200 px-3 py-2 text-sm text-surface-700 transition-colors hover:bg-surface-50"
+                aria-label="Admin panel"
+              >
+                <ShieldCheck className="h-4 w-4 text-surface-500" />
+                <span className="hidden sm:inline">Admin</span>
+              </button>
+            </Tooltip>
+          )}
+
           <div className="relative hidden md:block">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
             <input

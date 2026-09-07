@@ -3,8 +3,13 @@ import { LanguageProvider } from './contexts/LanguageContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { RoleProvider } from './contexts/RoleContext';
 import { AccessibilityProvider } from './contexts/AccessibilityContext';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { CompanyProvider } from './contexts/CompanyContext';
+import { AuthProvider, useAuth, isGlobalAdmin } from './contexts/AuthContext';
+import type { DemoUser } from './contexts/AuthContext';
+import {
+  CompanyProvider,
+  ActiveCompanyProvider,
+  useActiveCompany,
+} from './contexts/CompanyContext';
 import Layout from './components/layout/Layout';
 import ProtectedRoute from './components/routing/ProtectedRoute';
 import Login from './pages/Login';
@@ -38,12 +43,41 @@ function AuthenticatedApp() {
   }
 
   return (
-    // key: kullanici degisince rol/duzen contextleri bastan kurulur
-    <CompanyProvider key={currentUser.username} company={currentUser.company}>
-      <RoleProvider initialRole={currentUser.role}>
+    // Aktif firma katmani CompanyProvider'in USTUNDE durur: firma degistiginde
+    // asagisi bastan kurulmali. key: kullanici degisince secim de sifirlanir.
+    <ActiveCompanyProvider
+      key={currentUser.username}
+      username={currentUser.username}
+      initialCompany={currentUser.company}
+      canSwitch={isGlobalAdmin(currentUser)}
+    >
+      <CompanyScopedApp user={currentUser} />
+    </ActiveCompanyProvider>
+  );
+}
+
+function CompanyScopedApp({ user }: { user: DemoUser }) {
+  const { activeCompany } = useActiveCompany();
+
+  // 🔴 Kapi `scope === 'global'`, `isAdmin` DEGIL. isAdmin uzerinden acilan
+  // her istisna kam.admin ve jpb.admin'i de kapsar ve Isıl'in 2026-08-31
+  // kararini (admin kendi panelinin disina cikamaz) deler.
+  const isSuper = isGlobalAdmin(user);
+
+  return (
+    // key'e aktif firma da girer: firma degisince rol/duzen contextleri ve
+    // sayfalar yeni firmanin kartlariyla bastan cizilir.
+    <CompanyProvider key={`${user.username}:${activeCompany}`} company={activeCompany}>
+      <RoleProvider initialRole={user.role}>
         <BrowserRouter>
-          {/* Admin panel disina cikamaz — turu da kendi paneline ait olan. Isıl karari 2026-08-31 */}
-          {currentUser.isAdmin ? <AdminTour /> : <OnboardingTour />}
+          {/*
+            Tur, kullanicinin DUSTUGU yere gore secilir.
+            Super admin de artik panelde basladigi icin panel turunu gorur
+            (Isıl karari 2026-09-07). Director'in "OnboardingTour" secimi
+            "dashboard'a duser" varsayimina dayaniyordu — o varsayim degisti.
+            Kodda turu elle yeniden baslatan tetik yok (tek cagri yeri burasi).
+          */}
+          {user.isAdmin ? <AdminTour /> : <OnboardingTour />}
           <Routes>
             {/*
               Admin paneli — firma kapsamli, kendi disinda gezinme yok.
@@ -54,13 +88,36 @@ function AuthenticatedApp() {
             */}
             <Route
               path="/admin"
-              element={currentUser.isAdmin ? <AdminPanel /> : <Navigate to="/" replace />}
+              element={user.isAdmin ? <AdminPanel /> : <Navigate to="/" replace />}
             />
 
             <Route path="/" element={<Layout />}>
+              {/*
+                Kok artik ICERIK GOSTERMEZ — yalnizca dagiticidir.
+                Isıl karari 2026-09-07: "sayfa admin yeriyle baslasin, istersek
+                SMAP'e gecebilelim" → her admin panelde baslar, super admin dahil.
+                Fark cikista: normal admin panelin disina cikamaz, super admin cikar.
+
+                Neden Dashboard kokten alindi: panelden "Back to app" koke
+                gelseydi bu yonlendirme onu panele geri atardi — dugme sonsuz
+                donguye girerdi. Ayni tuzak Sidebar'in Dashboard baglantisinda
+                da vardi (koke gidiyordu).
+              */}
               <Route
                 index
-                element={currentUser.isAdmin ? <Navigate to="/admin" replace /> : <Dashboard />}
+                element={<Navigate to={user.isAdmin ? '/admin' : '/dashboard'} replace />}
+              />
+
+              {/*
+                Uygulamanin gercek giris sayfasi.
+                🔴 Normal admin buraya da giremez: AC9 (Isıl karari 2026-08-31)
+                panelden cikisi kapatiyor, yeni bir adres o kapiyi delmemeli.
+              */}
+              <Route
+                path="dashboard"
+                element={
+                  user.isAdmin && !isSuper ? <Navigate to="/admin" replace /> : <Dashboard />
+                }
               />
 
               {/* Layer 2: Cognitive Digital Twins */}

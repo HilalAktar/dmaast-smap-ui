@@ -39,7 +39,7 @@ export interface AppPage {
 }
 
 export const APP_PAGES: AppPage[] = [
-  { key: 'dashboard', path: '/', label: 'Dashboard', group: 'Overview', layoutId: 'dashboard' },
+  { key: 'dashboard', path: '/dashboard', label: 'Dashboard', group: 'Overview', layoutId: 'dashboard' },
 
   { key: 'value-chain', path: '/digital-twin/value-chain', label: 'Value Chain DT', group: 'Digital Twins', layoutId: 'value-chain' },
   { key: 'manufacturing', path: '/digital-twin/manufacturing', label: 'Manufacturing DT', group: 'Digital Twins', layoutId: 'manufacturing' },

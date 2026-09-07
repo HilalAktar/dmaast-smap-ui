@@ -15,7 +15,13 @@ export default function ProtectedRoute({ permission, children }: ProtectedRouteP
   const { hasPermission } = useRole();
 
   if (!hasPermission(permission)) {
-    return <Navigate to="/" state={{ accessDenied: true }} replace />;
+    /*
+     * 🔴 Hedef "/" DEGIL, "/dashboard".
+     * Kok artik icerik gostermeyen bir dagitici (Isıl karari 2026-09-07);
+     * oraya gidilirse ikinci bir <Navigate> daha calisir ve `state` KAYBOLUR —
+     * Dashboard'daki "access denied" uyarisi (Dashboard.tsx:58) hic gorunmezdi.
+     */
+    return <Navigate to="/dashboard" state={{ accessDenied: true }} replace />;
   }
 
   return <>{children}</>;
