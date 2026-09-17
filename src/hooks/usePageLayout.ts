@@ -1,19 +1,36 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useRole } from '../contexts/RoleContext';
+import { useRole, type UserRole } from '../contexts/RoleContext';
+import { useCompany, type Company } from '../contexts/CompanyContext';
 import {
-  getRoleDefaultLayout,
   getStorageKey,
+  buildLayoutItems,
+  getCompanyItems,
   PAGE_LAYOUTS,
 } from '../data/pageLayouts';
+import { loadAdminConfig } from '../data/adminConfig';
 import type { LayoutItem, PageId } from '../types/pageLayout';
 
-function loadLayout(pageId: PageId, role: ReturnType<typeof useRole>['role']): LayoutItem[] {
-  const storageKey = getStorageKey(pageId, role);
+/**
+ * Varsayilan duzen artik ADMIN PANELINDEN gelir (Işıl karari 2026-08-30).
+ * Admin bir karti kapattiysa o rol icin varsayilan duzende gorunmez.
+ * Admin kaydi yoksa pageLayouts'taki rol varsayilanina duser.
+ */
+function adminDefaultLayout(pageId: PageId, role: UserRole, company: Company): LayoutItem[] {
+  const config = PAGE_LAYOUTS[pageId];
+  const items = getCompanyItems(pageId, company);
+  const admin = loadAdminConfig(company);
+  const allowed = admin.cards[role]?.[pageId] ?? config.roleDefaults[role] ?? config.roleDefaults.engineer;
+  return buildLayoutItems(items, allowed);
+}
+
+function loadLayout(pageId: PageId, role: UserRole, company: Company): LayoutItem[] {
+  // Duzen anahtari firma bazli — KAM ve JPB birbirinin duzenini ezmez
+  const storageKey = `${getStorageKey(pageId, role)}-${company}`;
   const saved = localStorage.getItem(storageKey);
   if (saved) {
     try {
       const parsed = JSON.parse(saved) as LayoutItem[];
-      const definitions = PAGE_LAYOUTS[pageId].items;
+      const definitions = getCompanyItems(pageId, company);
       const definitionIds = new Set(definitions.map((d) => d.id));
 
       const validItems = parsed.filter((item) => definitionIds.has(item.id));
@@ -28,35 +45,38 @@ function loadLayout(pageId: PageId, role: ReturnType<typeof useRole>['role']): L
 
       return [...validItems, ...missing].sort((a, b) => a.order - b.order);
     } catch {
-      return getRoleDefaultLayout(pageId, role);
+      return adminDefaultLayout(pageId, role, company);
     }
   }
-  return getRoleDefaultLayout(pageId, role);
+  return adminDefaultLayout(pageId, role, company);
 }
 
 export function usePageLayout(pageId: PageId) {
   const { role } = useRole();
-  const [items, setItems] = useState<LayoutItem[]>(() => loadLayout(pageId, role));
-  const [showCustomizer, setShowCustomizer] = useState(false);
+  const { company } = useCompany();
+  const [items, setItems] = useState<LayoutItem[]>(() => loadLayout(pageId, role, company));
 
   useEffect(() => {
-    setItems(loadLayout(pageId, role));
-  }, [pageId, role]);
+    setItems(loadLayout(pageId, role, company));
+  }, [pageId, role, company]);
 
   const saveLayout = useCallback(
     (newItems: LayoutItem[]) => {
       const normalized = newItems.map((item, index) => ({ ...item, order: index }));
       setItems(normalized);
-      localStorage.setItem(getStorageKey(pageId, role), JSON.stringify(normalized));
+      localStorage.setItem(
+        `${getStorageKey(pageId, role)}-${company}`,
+        JSON.stringify(normalized),
+      );
     },
-    [pageId, role],
+    [pageId, role, company],
   );
 
   const resetToRoleDefault = useCallback((): LayoutItem[] => {
-    const defaults = getRoleDefaultLayout(pageId, role);
+    const defaults = adminDefaultLayout(pageId, role, company);
     saveLayout(defaults);
     return defaults;
-  }, [pageId, role, saveLayout]);
+  }, [pageId, role, company, saveLayout]);
 
   const isVisible = useCallback(
     (id: string) => items.find((item) => item.id === id)?.visible ?? false,
@@ -92,8 +112,6 @@ export function usePageLayout(pageId: PageId) {
     isVisible,
     saveLayout,
     resetToRoleDefault,
-    showCustomizer,
-    setShowCustomizer,
     pageLabel: PAGE_LAYOUTS[pageId].label,
   };
 }

@@ -1,8 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  BarChart,
-  Bar,
   LineChart,
   Line,
   XAxis,
@@ -11,169 +9,30 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
   LabelList,
 } from 'recharts';
-import { Activity, TrendingUp, AlertTriangle, Clock, Settings, X, Check } from 'lucide-react';
+import { Activity, TrendingUp, AlertTriangle, Clock } from 'lucide-react';
 import Header from '../components/layout/Header';
 import FilterBar from '../components/shared/FilterBar';
 import KpiCard from '../components/shared/KpiCard';
 import AlertCard from '../components/shared/AlertCard';
-import TooltipUI from '../components/shared/Tooltip';
 import { TaskListWidget } from '../components/shared/HITLValidation';
-import { dashboardKpis, recentAlerts, productionTrendData, mudaData, hitlValidationTasks } from '../data/mockData';
+import { productionTrendData, hitlValidationTasks } from '../data/mockData';
+import { getWidgetKpis } from '../data/pageLayouts';
+import { tKpiLabel, tUnit } from '../i18n/dataLabels';
+import { getCompanyAlerts } from '../data/alerts';
+import { useCompany } from '../contexts/CompanyContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useRole } from '../contexts/RoleContext';
 import { useToast } from '../contexts/ToastContext';
 import { useAccessibility } from '../contexts/AccessibilityContext';
-import PageCustomizer from '../components/shared/PageCustomizer';
-import PageToolbar from '../components/shared/PageToolbar';
 import { usePageLayout } from '../hooks/usePageLayout';
 
-const MUDA_COLORS = ['#ef4444', '#f59e0b', '#3b82f6', '#8b5cf6', '#ec4899', '#10b981', '#06b6d4'];
-const MUDA_PATTERN_IDS = ['muda-stripe', 'muda-dots', 'muda-crosshatch', 'muda-diagonal', 'muda-diamond', 'muda-horizontal', 'muda-zigzag'];
-
-const DATA_SOURCES = ['Manufacturing DT', 'Value Chain DT', 'Logistics DT', 'Sustainability DT'] as const;
-const TIME_RANGES = ['Last 24h', 'Last 7 Days', 'Last 30 Days', 'Custom'] as const;
-
-const WIDGET_METRICS: Record<string, string[]> = {
-  'quick-stats': ['OEE', 'Throughput', 'Lead Time', 'Alert Count'],
-  'kpi-primary': ['OEE', 'Throughput', 'Cycle Time', 'Yield', 'Downtime', 'Scrap Rate', 'Cost per Unit', 'Energy Usage'],
-  'production-trend': ['Actual Output', 'Target Output', 'Efficiency %', 'Defect Rate'],
-  'muda-analysis': ['Overproduction', 'Waiting', 'Transport', 'Rework', 'Overprocessing', 'Inventory', 'Motion'],
-  'waste-reduction': ['Current Value', 'Target Value', 'Reduction %', 'Cost Impact'],
-  'alerts': ['Critical', 'Warning', 'Info', 'Acknowledged'],
-  'kpi-secondary': ['Sustainability Score', 'Carbon Footprint', 'Water Usage', 'Waste Ratio'],
-};
-
-interface WidgetConfig {
-  dataSource: typeof DATA_SOURCES[number];
-  timeRange: typeof TIME_RANGES[number];
-  selectedMetrics: string[];
-}
-
-type WidgetConfigs = Record<string, WidgetConfig>;
-
-const defaultWidgetConfig = (widgetId: string): WidgetConfig => ({
-  dataSource: 'Manufacturing DT',
-  timeRange: 'Last 7 Days',
-  selectedMetrics: WIDGET_METRICS[widgetId] || [],
-});
-
-function WidgetConfigPanel({
-  widgetId,
-  widgetTitle,
-  config,
-  onSave,
-  onClose,
-}: {
-  widgetId: string;
-  widgetTitle: string;
-  config: WidgetConfig;
-  onSave: (widgetId: string, config: WidgetConfig) => void;
-  onClose: () => void;
-}) {
-  const [localConfig, setLocalConfig] = useState<WidgetConfig>(config);
-  const metrics = WIDGET_METRICS[widgetId] || [];
-
-  const handleMetricToggle = (metric: string) => {
-    setLocalConfig(prev => ({
-      ...prev,
-      selectedMetrics: prev.selectedMetrics.includes(metric)
-        ? prev.selectedMetrics.filter(m => m !== metric)
-        : [...prev.selectedMetrics, metric],
-    }));
-  };
-
-  return (
-    <div className="absolute right-0 top-8 z-40 w-72 bg-white rounded-xl shadow-2xl border border-surface-200 overflow-hidden">
-      <div className="flex items-center justify-between p-3 border-b border-surface-200 bg-surface-50">
-        <h4 className="text-sm font-semibold text-surface-900">{widgetTitle} Config</h4>
-        <TooltipUI content="Close configuration">
-          <button
-            onClick={onClose}
-            className="p-1 text-surface-400 hover:text-surface-600 rounded transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </TooltipUI>
-      </div>
-      <div className="p-3 space-y-3">
-        <div>
-          <label className="block text-xs font-medium text-surface-700 mb-1">Data Source</label>
-          <select
-            value={localConfig.dataSource}
-            onChange={(e) => setLocalConfig(prev => ({ ...prev, dataSource: e.target.value as typeof DATA_SOURCES[number] }))}
-            className="w-full px-2 py-1.5 text-sm border border-surface-200 rounded-lg bg-white text-surface-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            {DATA_SOURCES.map(ds => (
-              <option key={ds} value={ds}>{ds}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-surface-700 mb-1">Time Range</label>
-          <select
-            value={localConfig.timeRange}
-            onChange={(e) => setLocalConfig(prev => ({ ...prev, timeRange: e.target.value as typeof TIME_RANGES[number] }))}
-            className="w-full px-2 py-1.5 text-sm border border-surface-200 rounded-lg bg-white text-surface-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            {TIME_RANGES.map(tr => (
-              <option key={tr} value={tr}>{tr}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-surface-700 mb-1">Metrics</label>
-          <div className="space-y-1 max-h-32 overflow-y-auto">
-            {metrics.map(metric => (
-              <button
-                key={metric}
-                type="button"
-                onClick={() => handleMetricToggle(metric)}
-                className="flex items-center gap-2 px-2 py-1 rounded hover:bg-surface-50 cursor-pointer w-full text-left"
-              >
-                <span className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
-                  localConfig.selectedMetrics.includes(metric)
-                    ? 'bg-primary-500 border-primary-500'
-                    : 'border-surface-300 bg-white'
-                }`}>
-                  {localConfig.selectedMetrics.includes(metric) && (
-                    <Check className="w-3 h-3 text-white" />
-                  )}
-                </span>
-                <span className="text-sm text-surface-700">{metric}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-      <div className="flex items-center justify-end gap-2 p-3 border-t border-surface-200 bg-surface-50">
-        <button
-          onClick={onClose}
-          className="px-3 py-1.5 text-xs text-surface-600 hover:bg-surface-200 rounded-lg transition-colors"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={() => { onSave(widgetId, localConfig); onClose(); }}
-          className="px-3 py-1.5 text-xs bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
-        >
-          Apply
-        </button>
-      </div>
-    </div>
-  );
-}
 
 const WIDGET_SIZES: Record<string, 'small' | 'medium' | 'large'> = {
   'quick-stats': 'large',
   'kpi-primary': 'large',
   'production-trend': 'large',
-  'muda-analysis': 'medium',
-  'waste-reduction': 'large',
   'alerts': 'medium',
   'hitl-tasks': 'medium',
   'kpi-secondary': 'large',
@@ -186,13 +45,14 @@ interface DashboardWidget {
 
 export default function Dashboard() {
   const { t } = useLanguage();
-  const { config, hasPermission } = useRole();
+  const { config } = useRole();
   const { showToast } = useToast();
   const { settings: a11y } = useAccessibility();
   const location = useLocation();
   const navigate = useNavigate();
   const isLite = a11y.liteMode;
-  const canConfigure = hasPermission('canConfigureDashboards');
+  const { company } = useCompany();
+  const recentAlerts = getCompanyAlerts(company);
   const criticalAlerts = recentAlerts.filter(a => a.severity === 'critical' && !a.acknowledged);
 
   useEffect(() => {
@@ -224,44 +84,60 @@ export default function Dashboard() {
   }, []);
 
   const layout = usePageLayout('dashboard');
-  const [activeConfigPanel, setActiveConfigPanel] = useState<string | null>(null);
-
-  const [widgetConfigs, setWidgetConfigs] = useState<WidgetConfigs>(() => {
-    const saved = localStorage.getItem('smap-widget-configs');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch {
-        return {};
-      }
-    }
-    return {};
-  });
-
-  const getWidgetConfig = useCallback((widgetId: string): WidgetConfig => {
-    return widgetConfigs[widgetId] || defaultWidgetConfig(widgetId);
-  }, [widgetConfigs]);
-
-  const handleSaveWidgetConfig = useCallback((widgetId: string, newConfig: WidgetConfig) => {
-    setWidgetConfigs(prev => {
-      const updated = { ...prev, [widgetId]: newConfig };
-      localStorage.setItem('smap-widget-configs', JSON.stringify(updated));
-      return updated;
-    });
-  }, []);
 
   const visibleWidgets: DashboardWidget[] = layout.visibleWidgetItems.map((item) => ({
     id: item.id,
     size: WIDGET_SIZES[item.id] || 'medium',
   }));
 
-  const isWidgetVisible = (id: string) => layout.isVisible(id);
+  /**
+   * KPI'lar artik kayit defterinden cozulur (Isil is emri 2026-09-02, Bulgu 1).
+   * Onceki hal `dashboardKpis.slice(0,8)` / `.slice(8)` idi: kart karari
+   * kayit defterinde yasiyordu ama Dashboard oraya BAKMIYORDU, bu yuzden
+   * 2026-08-30/31'de cikarilan dort KPI ekranda kalmisti.
+   */
+  const primaryKpis = getWidgetKpis('dashboard', 'kpi-primary');
+  const secondaryKpis = getWidgetKpis('dashboard', 'kpi-secondary');
 
+  // quick-stats de ayni kaynaktan beslenir — sabit dize tasimaz.
+  const quickStatKpis = getWidgetKpis('dashboard', 'quick-stats');
+  const QUICK_STAT_STYLES: Record<string, { icon: typeof Activity; color: string; bg: string }> = {
+    'production-throughput': { icon: TrendingUp, color: 'text-green-500', bg: 'bg-green-50' },
+    'defect-rate': { icon: Activity, color: 'text-primary-500', bg: 'bg-primary-50' },
+    'lead-time': { icon: Clock, color: 'text-amber-500', bg: 'bg-amber-50' },
+  };
+  /**
+   * ETIKET KURALI (Isil karari 2026-09-07): "arayuzle isimler ayni olsun."
+   *
+   * 1) Uyari kutusu Alert Center'in KENDI kelimesini kullanir —
+   *    `alerts.filter.critical` ('Critical' / 'Kritik' / 'Kritisch' ...).
+   *    Eski etiket `dashboard.alerts` = "Recent Alerts" idi ama kutu yalnizca
+   *    critical+onaylanmamis uyarilari sayiyor (bkz. `criticalAlerts`).
+   *    Isil ekranda gordu: Alert Center 2 uyari listelerken kutu 0 gosteriyordu.
+   *    Sayi dogruydu, AD yanlisti. Yeni ceviri uydurulmadi — anahtar 6 dilde zaten var.
+   *
+   * 2) KPI kutulari artik KATALOG adini kullanir (`kpi.label`) — yani hemen
+   *    altlarindaki KpiCard ne yaziyorsa kutuda da o yazar. Onceki halde kismi
+   *    bir ceviri haritasi vardi: throughput kutusu "Daily Throughput" derken
+   *    alttaki kart "Production Throughput" diyordu (ayni sayi, iki isim), ve
+   *    lead-time haritada olmadigi icin zaten katalog adina dusuyordu.
+   *    BEDELI KAYDA GECTI: `dashboard.kpi.throughput` / `.defectRate` cevirileri
+   *    artik cagrilmiyor; KPI adlari 6 dile cevrilene kadar (ayri is kalemi)
+   *    bu kutular Ingilizce kalir — kartlar zaten Ingilizce oldugu icin sayfa
+   *    kendi icinde TUTARLI olur. Anahtarlar silinmedi, ceviri isi gelince kullanilir.
+   */
   const quickStats = [
-    { label: t('dashboard.alerts'), value: criticalAlerts.length, icon: AlertTriangle, color: 'text-red-500', bg: 'bg-red-50' },
-    { label: t('dashboard.kpi.oee'), value: '87.5%', icon: Activity, color: 'text-primary-500', bg: 'bg-primary-50' },
-    { label: t('dashboard.kpi.throughput'), value: '1,248', icon: TrendingUp, color: 'text-green-500', bg: 'bg-green-50' },
-    { label: 'Avg Lead Time', value: '12.4 days', icon: Clock, color: 'text-amber-500', bg: 'bg-amber-50' },
+    { label: t('alerts.filter.critical'), value: String(criticalAlerts.length), icon: AlertTriangle, color: 'text-red-500', bg: 'bg-red-50' },
+    ...quickStatKpis.map((kpi) => {
+      const style = QUICK_STAT_STYLES[kpi.id] ?? { icon: Activity, color: 'text-primary-500', bg: 'bg-primary-50' };
+      return {
+        label: tKpiLabel(t, kpi),
+        value: `${kpi.value.toLocaleString()}${kpi.unit === '%' ? '%' : ` ${tUnit(t, kpi.unit)}`}`,
+        icon: style.icon,
+        color: style.color,
+        bg: style.bg,
+      };
+    }),
   ];
 
   const renderWidget = (widgetId: string) => {
@@ -271,25 +147,6 @@ export default function Dashboard() {
           <div>
             <div className="flex items-center justify-between mb-3 relative">
               <h3 className="font-semibold text-surface-900">Quick Stats</h3>
-              {canConfigure && (
-                <TooltipUI content="Configure widget">
-                  <button
-                    onClick={() => setActiveConfigPanel(activeConfigPanel === 'quick-stats' ? null : 'quick-stats')}
-                    className="p-1.5 text-surface-400 hover:text-surface-600 hover:bg-surface-100 rounded-lg transition-colors"
-                  >
-                    <Settings className="w-4 h-4" />
-                  </button>
-                </TooltipUI>
-              )}
-              {activeConfigPanel === 'quick-stats' && (
-                <WidgetConfigPanel
-                  widgetId="quick-stats"
-                  widgetTitle="Quick Stats"
-                  config={getWidgetConfig('quick-stats')}
-                  onSave={handleSaveWidgetConfig}
-                  onClose={() => setActiveConfigPanel(null)}
-                />
-              )}
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
               {quickStats.map((stat) => (
@@ -312,28 +169,9 @@ export default function Dashboard() {
           <div>
             <div className="flex items-center justify-between mb-3 relative">
               <h3 className="font-semibold text-surface-900">Primary KPIs</h3>
-              {canConfigure && (
-                <TooltipUI content="Configure widget">
-                  <button
-                    onClick={() => setActiveConfigPanel(activeConfigPanel === 'kpi-primary' ? null : 'kpi-primary')}
-                    className="p-1.5 text-surface-400 hover:text-surface-600 hover:bg-surface-100 rounded-lg transition-colors"
-                  >
-                    <Settings className="w-4 h-4" />
-                  </button>
-                </TooltipUI>
-              )}
-              {activeConfigPanel === 'kpi-primary' && (
-                <WidgetConfigPanel
-                  widgetId="kpi-primary"
-                  widgetTitle="Primary KPIs"
-                  config={getWidgetConfig('kpi-primary')}
-                  onSave={handleSaveWidgetConfig}
-                  onClose={() => setActiveConfigPanel(null)}
-                />
-              )}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
-              {dashboardKpis.slice(0, isLite ? 4 : 8).map((kpi) => (
+              {primaryKpis.slice(0, isLite ? 4 : primaryKpis.length).map((kpi) => (
                 <KpiCard key={kpi.id} kpi={kpi} />
               ))}
             </div>
@@ -345,25 +183,6 @@ export default function Dashboard() {
           <div className="lg:col-span-2 bg-white rounded-xl shadow-card p-4 lg:p-5 overflow-hidden">
             <div className="flex items-center justify-between mb-4 relative">
               <h3 className="font-semibold text-surface-900">Production Trend</h3>
-              {canConfigure && (
-                <TooltipUI content="Configure widget">
-                  <button
-                    onClick={() => setActiveConfigPanel(activeConfigPanel === 'production-trend' ? null : 'production-trend')}
-                    className="p-1.5 text-surface-400 hover:text-surface-600 hover:bg-surface-100 rounded-lg transition-colors"
-                  >
-                    <Settings className="w-4 h-4" />
-                  </button>
-                </TooltipUI>
-              )}
-              {activeConfigPanel === 'production-trend' && (
-                <WidgetConfigPanel
-                  widgetId="production-trend"
-                  widgetTitle="Production Trend"
-                  config={getWidgetConfig('production-trend')}
-                  onSave={handleSaveWidgetConfig}
-                  onClose={() => setActiveConfigPanel(null)}
-                />
-              )}
             </div>
             <div className="h-64 lg:h-72 overflow-hidden">
               <ResponsiveContainer width="100%" height="100%">
@@ -418,256 +237,16 @@ export default function Dashboard() {
           </div>
         );
 
-      case 'muda-analysis':
-        if (isLite) return (
-          <div className="bg-white rounded-xl shadow-card p-4 lg:p-5">
-            <h3 className="font-semibold text-surface-900 mb-2">MUDA Analysis</h3>
-            <p className="text-sm text-surface-500">Detailed MUDA analysis is hidden in Lite Mode for simplicity. Switch to Standard Mode to view the full breakdown.</p>
-          </div>
-        );
-        return (
-          <div className="bg-white rounded-xl shadow-card p-4 lg:p-5 overflow-hidden">
-            <div className="flex items-center justify-between mb-4 relative">
-              <h3 className="font-semibold text-surface-900">MUDA Analysis</h3>
-              {canConfigure && (
-                <TooltipUI content="Configure widget">
-                  <button
-                    onClick={() => setActiveConfigPanel(activeConfigPanel === 'muda-analysis' ? null : 'muda-analysis')}
-                    className="p-1.5 text-surface-400 hover:text-surface-600 hover:bg-surface-100 rounded-lg transition-colors"
-                  >
-                    <Settings className="w-4 h-4" />
-                  </button>
-                </TooltipUI>
-              )}
-              {activeConfigPanel === 'muda-analysis' && (
-                <WidgetConfigPanel
-                  widgetId="muda-analysis"
-                  widgetTitle="MUDA Analysis"
-                  config={getWidgetConfig('muda-analysis')}
-                  onSave={handleSaveWidgetConfig}
-                  onClose={() => setActiveConfigPanel(null)}
-                />
-              )}
-            </div>
-            <div className="h-64 lg:h-72 overflow-hidden">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-                  <defs>
-                    {MUDA_COLORS.map((color, i) => {
-                      const patternId = MUDA_PATTERN_IDS[i];
-                      if (i === 0) return (
-                        <pattern key={patternId} id={patternId} patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
-                          <rect width="6" height="6" fill={color} />
-                          <line x1="0" y1="0" x2="0" y2="6" stroke="rgba(255,255,255,0.4)" strokeWidth="2" />
-                        </pattern>
-                      );
-                      if (i === 1) return (
-                        <pattern key={patternId} id={patternId} patternUnits="userSpaceOnUse" width="6" height="6">
-                          <rect width="6" height="6" fill={color} />
-                          <circle cx="3" cy="3" r="1.5" fill="rgba(255,255,255,0.4)" />
-                        </pattern>
-                      );
-                      if (i === 2) return (
-                        <pattern key={patternId} id={patternId} patternUnits="userSpaceOnUse" width="8" height="8">
-                          <rect width="8" height="8" fill={color} />
-                          <path d="M0,0 L8,8 M8,0 L0,8" stroke="rgba(255,255,255,0.3)" strokeWidth="1.5" />
-                        </pattern>
-                      );
-                      if (i === 3) return (
-                        <pattern key={patternId} id={patternId} patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(-45)">
-                          <rect width="6" height="6" fill={color} />
-                          <line x1="0" y1="0" x2="0" y2="6" stroke="rgba(255,255,255,0.4)" strokeWidth="2" />
-                        </pattern>
-                      );
-                      if (i === 4) return (
-                        <pattern key={patternId} id={patternId} patternUnits="userSpaceOnUse" width="8" height="8">
-                          <rect width="8" height="8" fill={color} />
-                          <rect x="2" y="2" width="4" height="4" fill="rgba(255,255,255,0.3)" transform="rotate(45,4,4)" />
-                        </pattern>
-                      );
-                      if (i === 5) return (
-                        <pattern key={patternId} id={patternId} patternUnits="userSpaceOnUse" width="6" height="6">
-                          <rect width="6" height="6" fill={color} />
-                          <line x1="0" y1="3" x2="6" y2="3" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5" />
-                        </pattern>
-                      );
-                      return (
-                        <pattern key={patternId} id={patternId} patternUnits="userSpaceOnUse" width="8" height="4">
-                          <rect width="8" height="4" fill={color} />
-                          <polyline points="0,4 4,0 8,4" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5" />
-                        </pattern>
-                      );
-                    })}
-                  </defs>
-                  <Pie
-                    data={mudaData}
-                    cx="50%"
-                    cy="40%"
-                    innerRadius={40}
-                    outerRadius={65}
-                    paddingAngle={2}
-                    dataKey="value"
-                    nameKey="category"
-                    label={({ cx, cy, midAngle, outerRadius: oR, category, value }: { cx: number; cy: number; midAngle: number; outerRadius: number; category: string; value: number }) => {
-                      const RADIAN = Math.PI / 180;
-                      const radius = oR + 18;
-                      const x = cx + radius * Math.cos(-midAngle * RADIAN);
-                      const y = cy + radius * Math.sin(-midAngle * RADIAN);
-                      return (
-                        <text
-                          x={x}
-                          y={y}
-                          textAnchor={x > cx ? 'start' : 'end'}
-                          dominantBaseline="central"
-                          fontSize={9}
-                          fill="#525252"
-                        >
-                          {category} ({value})
-                        </text>
-                      );
-                    }}
-                  >
-                    {mudaData.map((_, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={`url(#${MUDA_PATTERN_IDS[index % MUDA_PATTERN_IDS.length]})`}
-                        strokeWidth={2}
-                        stroke="#fff"
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'white',
-                      border: '1px solid #e5e5e5',
-                      borderRadius: '8px',
-                      fontSize: '12px',
-                    }}
-                  />
-                  <Legend
-                    layout="horizontal"
-                    align="center"
-                    verticalAlign="bottom"
-                    wrapperStyle={{ fontSize: '10px', paddingTop: '8px' }}
-                    formatter={(value: string, entry: { color?: string }, index: number) => (
-                      <span style={{ color: '#525252' }}>
-                        <span
-                          style={{
-                            display: 'inline-block',
-                            width: 10,
-                            height: 10,
-                            backgroundColor: MUDA_COLORS[index % MUDA_COLORS.length],
-                            marginRight: 4,
-                            borderRadius: 2,
-                          }}
-                        />
-                        {value}
-                      </span>
-                    )}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        );
-
-      case 'waste-reduction':
-        if (isLite) return (
-          <div className="bg-white rounded-xl shadow-card p-4 lg:p-5">
-            <h3 className="font-semibold text-surface-900 mb-2">Waste Reduction</h3>
-            <p className="text-sm text-surface-500">Waste reduction details are hidden in Lite Mode. Switch to Standard Mode for the full view.</p>
-          </div>
-        );
-        return (
-          <div className="lg:col-span-2 bg-white rounded-xl shadow-card p-4 lg:p-5 overflow-hidden">
-            <div className="flex items-center justify-between mb-4 relative">
-              <h3 className="font-semibold text-surface-900">Waste Reduction Progress</h3>
-              {canConfigure && (
-                <TooltipUI content="Configure widget">
-                  <button
-                    onClick={() => setActiveConfigPanel(activeConfigPanel === 'waste-reduction' ? null : 'waste-reduction')}
-                    className="p-1.5 text-surface-400 hover:text-surface-600 hover:bg-surface-100 rounded-lg transition-colors"
-                  >
-                    <Settings className="w-4 h-4" />
-                  </button>
-                </TooltipUI>
-              )}
-              {activeConfigPanel === 'waste-reduction' && (
-                <WidgetConfigPanel
-                  widgetId="waste-reduction"
-                  widgetTitle="Waste Reduction"
-                  config={getWidgetConfig('waste-reduction')}
-                  onSave={handleSaveWidgetConfig}
-                  onClose={() => setActiveConfigPanel(null)}
-                />
-              )}
-            </div>
-            <div className="h-64 lg:h-72 overflow-hidden">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={mudaData} layout="vertical" margin={{ top: 5, right: 40, bottom: 5, left: 10 }}>
-                  <defs>
-                    <pattern id="stripe-current" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
-                      <rect width="6" height="6" fill="#ef4444" />
-                      <line x1="0" y1="0" x2="0" y2="6" stroke="#dc2626" strokeWidth="2" />
-                    </pattern>
-                    <pattern id="stripe-target" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(-45)">
-                      <rect width="6" height="6" fill="#10b981" />
-                      <line x1="0" y1="0" x2="0" y2="6" stroke="#059669" strokeWidth="2" />
-                    </pattern>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" horizontal={true} vertical={false} />
-                  <XAxis type="number" tick={{ fontSize: 12 }} stroke="#737373" />
-                  <YAxis dataKey="category" type="category" tick={{ fontSize: 10 }} stroke="#737373" width={85} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'white',
-                      border: '1px solid #e5e5e5',
-                      borderRadius: '8px',
-                      fontSize: '12px',
-                    }}
-                  />
-                  <Legend />
-                  <Bar dataKey="value" fill="url(#stripe-current)" name="Current" radius={[0, 4, 4, 0]} stroke="#ef4444" strokeWidth={1}>
-                    <LabelList dataKey="value" position="right" fontSize={10} fill="#525252" />
-                  </Bar>
-                  <Bar dataKey="target" fill="url(#stripe-target)" name="Target" radius={[0, 4, 4, 0]} stroke="#10b981" strokeWidth={1}>
-                    <LabelList dataKey="target" position="right" fontSize={10} fill="#525252" />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        );
-
       case 'alerts':
         return (
           <div className="bg-white rounded-xl shadow-card p-4 lg:p-5 overflow-hidden flex flex-col max-h-96">
             <div className="flex items-center justify-between mb-4 flex-shrink-0 relative">
               <h3 className="font-semibold text-surface-900">{t('dashboard.alerts')}</h3>
               <div className="flex items-center gap-2">
-                {canConfigure && (
-                  <TooltipUI content="Configure widget">
-                    <button
-                      onClick={() => setActiveConfigPanel(activeConfigPanel === 'alerts' ? null : 'alerts')}
-                      className="p-1.5 text-surface-400 hover:text-surface-600 hover:bg-surface-100 rounded-lg transition-colors"
-                    >
-                      <Settings className="w-4 h-4" />
-                    </button>
-                  </TooltipUI>
-                )}
                 <a href="/alerts" className="text-sm text-primary-600 hover:text-primary-700">
                   {t('dashboard.viewAll')}
                 </a>
               </div>
-              {activeConfigPanel === 'alerts' && (
-                <WidgetConfigPanel
-                  widgetId="alerts"
-                  widgetTitle="Alerts"
-                  config={getWidgetConfig('alerts')}
-                  onSave={handleSaveWidgetConfig}
-                  onClose={() => setActiveConfigPanel(null)}
-                />
-              )}
             </div>
             <div className="space-y-3 overflow-y-auto flex-1 min-h-0">
               {recentAlerts.slice(0, isLite ? 2 : 3).map((alert) => (
@@ -691,28 +270,9 @@ export default function Dashboard() {
           <div>
             <div className="flex items-center justify-between mb-3 relative">
               <h3 className="font-semibold text-surface-900">Secondary KPIs</h3>
-              {canConfigure && (
-                <TooltipUI content="Configure widget">
-                  <button
-                    onClick={() => setActiveConfigPanel(activeConfigPanel === 'kpi-secondary' ? null : 'kpi-secondary')}
-                    className="p-1.5 text-surface-400 hover:text-surface-600 hover:bg-surface-100 rounded-lg transition-colors"
-                  >
-                    <Settings className="w-4 h-4" />
-                  </button>
-                </TooltipUI>
-              )}
-              {activeConfigPanel === 'kpi-secondary' && (
-                <WidgetConfigPanel
-                  widgetId="kpi-secondary"
-                  widgetTitle="Secondary KPIs"
-                  config={getWidgetConfig('kpi-secondary')}
-                  onSave={handleSaveWidgetConfig}
-                  onClose={() => setActiveConfigPanel(null)}
-                />
-              )}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
-              {dashboardKpis.slice(8).map((kpi) => (
+              {secondaryKpis.map((kpi) => (
                 <KpiCard key={kpi.id} kpi={kpi} />
               ))}
             </div>
@@ -725,7 +285,7 @@ export default function Dashboard() {
   };
 
   const fullWidthIds = new Set(['quick-stats', 'kpi-primary', 'kpi-secondary']);
-  const chartPairIds = new Set(['production-trend', 'muda-analysis', 'waste-reduction', 'alerts', 'hitl-tasks']);
+  const chartPairIds = new Set(['production-trend', 'alerts']);
 
   const renderDynamicWidgets = () => {
     const elements: React.ReactNode[] = [];
@@ -795,9 +355,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen">
       <Header title={t('dashboard.title')} subtitle={t('dashboard.subtitle')} />
-      <PageToolbar onCustomize={() => layout.setShowCustomizer(true)}>
-        <FilterBar showRoleSelector={false} />
-      </PageToolbar>
+        <FilterBar />
 
       <div className="mx-4 lg:mx-6 mt-4 px-4 py-3 bg-primary-50 border border-primary-200 rounded-lg flex items-center justify-between">
         <p className="text-sm text-primary-800">
@@ -811,15 +369,6 @@ export default function Dashboard() {
         {renderDynamicWidgets()}
       </div>
 
-      {layout.showCustomizer && (
-        <PageCustomizer
-          pageTitle={t('dashboard.title')}
-          items={layout.items}
-          onSave={layout.saveLayout}
-          onClose={() => layout.setShowCustomizer(false)}
-          onResetToRoleDefault={layout.resetToRoleDefault}
-        />
-      )}
     </div>
   );
 }

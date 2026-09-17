@@ -173,8 +173,16 @@ interface RoleContextType {
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined);
 
-export function RoleProvider({ children }: { children: ReactNode }) {
+export function RoleProvider({
+  children,
+  initialRole,
+}: {
+  children: ReactNode;
+  /** Oturum acan kullanicinin rolu (AuthContext'ten gelir). Verilmezse eski davranis korunur. */
+  initialRole?: UserRole;
+}) {
   const [role, setRoleState] = useState<UserRole>(() => {
+    if (initialRole) return initialRole;
     const saved = localStorage.getItem('smap-user-role');
     return (saved as UserRole) || 'operator';
   });

@@ -1,4 +1,4 @@
-import type { KpiData, Alert, DigitalTwinNode, SimulationScenario } from '../types';
+import type { KpiData, DigitalTwinNode, SimulationScenario, HitlValidationTask } from '../types';
 
 export const dashboardKpis: KpiData[] = [
   {
@@ -24,7 +24,7 @@ export const dashboardKpis: KpiData[] = [
     cluster: 'delivery',
     sparklineData: [1100, 1150, 1180, 1200, 1220, 1230, 1240, 1248],
     definition: 'Total number of finished units produced per day across all active production lines.',
-    dataSource: 'Manufacturing DT',
+    dataSource: 'UNCERTAIN · KAM · Shop Orders - Assembly (Completed Qty) · JPB · TBLVIEW_NBPOINT_SUIVIPROD (NBPIE, 5,779 rows) — part counts exist but no reliable per-day time basis · displayed number is a placeholder',
     helpUrl: '/help#production-throughput',
   },
   {
@@ -50,7 +50,7 @@ export const dashboardKpis: KpiData[] = [
     cluster: 'cost',
     sparklineData: [97, 97.5, 97.8, 98, 98, 98.1, 98.2, 98.2],
     definition: 'Ratio of good units produced to total units started, measuring production quality.',
-    dataSource: 'Manufacturing DT',
+    dataSource: 'KAM · Shop Orders - Assembly — UNCERTAIN (no started-vs-good split) · JPB · TBLVIEW_NBPOINT_SUIVIPROD NBPIE/(NBPIE+NBPIEABIME) — real · displayed number is a placeholder',
     helpUrl: '/help#yield-rate',
   },
   {
@@ -63,7 +63,7 @@ export const dashboardKpis: KpiData[] = [
     cluster: 'cost',
     sparklineData: [2.5, 2.3, 2.2, 2.0, 1.9, 1.9, 1.8, 1.8],
     definition: 'Percentage of produced units that fail quality inspection criteria.',
-    dataSource: 'Manufacturing DT',
+    dataSource: 'KAM · Receipts Scrapped/Arrived Qty (0.79%) · JPB · TBLVIEW_NBPOINT NBPIEABIME/NBPIE (2.04%) — real, measured 2026-09-02 · displayed number is a placeholder',
     helpUrl: '/help#defect-rate',
   },
   {
@@ -76,7 +76,7 @@ export const dashboardKpis: KpiData[] = [
     cluster: 'delivery',
     sparklineData: [15, 14.5, 14, 13.5, 13, 12.8, 12.5, 12.4],
     definition: 'Total elapsed time from order placement to customer delivery, spanning all supply chain stages.',
-    dataSource: 'Value Chain DT',
+    dataSource: 'KAM · Ext Customer Order Lines (Created → Last Actual Ship Date) · JPB · TBL_AFFAIRE+TBL_BL (DATEAF → DATEBL, 10,378 rows) — real · displayed number is a placeholder',
     helpUrl: '/help#lead-time',
   },
   {
@@ -89,7 +89,7 @@ export const dashboardKpis: KpiData[] = [
     cluster: 'delivery',
     sparklineData: [93, 94, 94.5, 95, 95.5, 96, 96.5, 96.8],
     definition: 'Percentage of orders delivered on time and in full to the customer.',
-    dataSource: 'Logistics DT',
+    dataSource: 'KAM · Ext Customer Order Lines (OTIF: Promised vs Last Actual Ship) · JPB · TBL_BL+TBL_AFFAIRE (DATEBL ≤ DDP) — real · displayed number is a placeholder',
     helpUrl: '/help#delivery-accuracy',
   },
   {
@@ -106,16 +106,22 @@ export const dashboardKpis: KpiData[] = [
     helpUrl: '/help#energy-per-unit',
   },
   {
+    // T4.2 (iii) — registry (dataSources.ts) AUTORITE: bu kart bir STOK DEGERI'dir,
+    //   DEVIR HIZI (turnover) DEGIL. Eski 'Inventory Turnover / turns/year' basligi
+    //   stok-vs-oran karistirmasiydi (dijital-ikiz kurali ihlali) ve pageLayouts
+    //   basligi ('Inventory Value') ile celisiyordu. Baslik/birim/tanim registry'ye
+    //   hizalandi. Deger YER TUTUCU: tek anlik stok goruntusunden devir hizi
+    //   turetilemez; gosterilecek gercek figur Isil kararina birakildi (bkz. rapor).
     id: 'inventory-turnover',
-    label: 'Inventory Turnover',
+    label: 'Inventory Value',
     value: 8.5,
-    unit: 'turns/year',
+    unit: 'value',
     trend: 0.8,
     target: 10,
     cluster: 'stock',
     sparklineData: [6.5, 7.0, 7.3, 7.6, 7.9, 8.1, 8.3, 8.5],
-    definition: 'Number of times inventory is sold and replaced over a year, indicating stock efficiency.',
-    dataSource: 'Value Chain DT',
+    definition: 'Point-in-time total stock value (a stock level, not a rate). Inventory turnover cannot be derived from a single stock snapshot.',
+    dataSource: 'KAM · Inventory Part in Stock — Total Inventory Value · 1,380 rows 100% filled, total ≈ 85.3M (real, single snapshot 19 Nov 2024) · JPB · TBL_LOTIE+TBL_STOCK (QTE × approx unit cost) — uncertain · displayed number is a placeholder',
     helpUrl: '/help#inventory-turnover',
   },
   {
@@ -127,8 +133,8 @@ export const dashboardKpis: KpiData[] = [
     target: 95,
     cluster: 'resource',
     sparklineData: [88, 89, 89.5, 90, 91, 91.5, 92, 92.3],
-    definition: 'Percentage of supplier deliveries that arrive on time and meet quality specifications.',
-    dataSource: 'Value Chain DT',
+    definition: 'Share of supplier deliveries arriving on time. UNCERTAIN: no measurable source in either company.',
+    dataSource: 'UNCERTAIN · KAM · Purchase Order Lines has only Planned Receipt Date (no actual receipt date) · JPB has no supplier master/performance table — cannot be measured · displayed number is a placeholder',
     helpUrl: '/help#supplier-reliability',
   },
   {
@@ -145,67 +151,35 @@ export const dashboardKpis: KpiData[] = [
     helpUrl: '/help#carbon-footprint',
   },
   {
+    // T4.2 (iii) — registry AUTORITE: bu kart 'Unit Cost' (maliyet/gelir orani),
+    //   'Cost Efficiency' (gerceklesen-vs-butce) DEGIL. Baslik/tanim/dataSource
+    //   registry ve pageLayouts basligi ('Unit Cost') ile hizalandi. Deger YER
+    //   TUTUCU: KAM gercek olcum maliyet/gelir %37,36 (549 satir). JPB belirsiz
+    //   (TAUXHOMMETP/TU 244.290 satirda hep 0). Gosterilen sayi yer tutucu.
     id: 'cost-efficiency',
-    label: 'Cost Efficiency',
+    label: 'Unit Cost',
     value: 94.7,
     unit: '%',
     trend: 2.3,
     target: 96,
     cluster: 'cost',
     sparklineData: [89, 90, 91, 92, 93, 93.5, 94, 94.7],
-    definition: 'Ratio of actual production cost to budgeted cost, reflecting operational cost control.',
-    dataSource: 'Value Chain DT',
+    definition: 'Cost-to-revenue ratio (total cost against net revenue). Lower is better.',
+    dataSource: 'KAM · Ext Customer Order Lines — Total Cost/Base ÷ Net Amt/Base · 549 rows, measured 37.36% (real) · JPB · TBL_GAMME TAUXHOMMETP/TU all-zero over 244,290 rows — uncertain · displayed number is a placeholder',
     helpUrl: '/help#cost-efficiency',
   },
 ];
 
-export const recentAlerts: Alert[] = [
-  {
-    id: 'alert-1',
-    title: 'Machine M-102 Temperature Warning',
-    message: 'Temperature sensor reading 85°C, approaching threshold of 90°C',
-    severity: 'warning',
-    timestamp: new Date(Date.now() - 15 * 60000),
-    source: 'Manufacturing DT',
-    acknowledged: false,
-  },
-  {
-    id: 'alert-2',
-    title: 'Supplier Delivery Delay',
-    message: 'Shipment #SH-2847 from Supplier A delayed by 2 days',
-    severity: 'warning',
-    timestamp: new Date(Date.now() - 45 * 60000),
-    source: 'Logistics DT',
-    acknowledged: false,
-  },
-  {
-    id: 'alert-3',
-    title: 'Low Stock Alert - Component C-445',
-    message: 'Stock level at 15% of safety stock threshold',
-    severity: 'critical',
-    timestamp: new Date(Date.now() - 120 * 60000),
-    source: 'Value Chain DT',
-    acknowledged: true,
-  },
-  {
-    id: 'alert-4',
-    title: 'Energy Consumption Spike',
-    message: 'Line 3 energy consumption 25% above baseline',
-    severity: 'info',
-    timestamp: new Date(Date.now() - 180 * 60000),
-    source: 'Sustainability DT',
-    acknowledged: false,
-  },
-  {
-    id: 'alert-5',
-    title: 'Quality Deviation Detected',
-    message: 'Product batch B-1247 showing 3.2% defect rate',
-    severity: 'critical',
-    timestamp: new Date(Date.now() - 240 * 60000),
-    source: 'Product DT',
-    acknowledged: false,
-  },
-];
+/*
+ * recentAlerts KALDIRILDI — 2026-08-31, Isil karari:
+ * "uydurma olanlarin hepsi cikartilsin, sadece gercekten gozukebilecekler kalsin".
+ *
+ * Buradaki 5 (+ AlertCenter icindeki 5) alarm elle uydurulmustu ve yedisi iki
+ * firmada da BULUNMAYAN veriyi anlatiyordu: sensor sicakligi, enerji x2, makine
+ * bakimi/durusu, OEE, reorder point, tedarikci puani.
+ *
+ * Yerine gecen tek kaynak: data/alerts.ts — dordu de ham veriden olculmustur.
+ */
 
 export const valueChainNodes: DigitalTwinNode[] = [
   {
@@ -308,15 +282,12 @@ export const simulationScenarios: SimulationScenario[] = [
   },
 ];
 
-export const mudaData = [
-  { category: 'Overproduction', value: 12, target: 5 },
-  { category: 'Waiting', value: 18, target: 10 },
-  { category: 'Transport', value: 8, target: 5 },
-  { category: 'Rework', value: 15, target: 8 },
-  { category: 'Overprocessing', value: 6, target: 3 },
-  { category: 'Inventory', value: 22, target: 15 },
-  { category: 'Motion', value: 9, target: 5 },
-];
+/*
+ * mudaData KALDIRILDI — 2026-08-31 (Isil onayi).
+ * 7 israf kategorisi elle uydurulmustu. KPI tablolarinda yalnizca JPB
+ * 'Waiting time' tanimli; o da POINT.TYPEALEA alani 272.078 satirin
+ * hepsinde '0' oldugu icin olculemiyor.
+ */
 
 export const paretoFrontData = [
   { id: 'p1', cost: 85, leadTime: 14.5, sustainability: 125, selected: false },
@@ -346,7 +317,7 @@ export const energyConsumptionData = [
   { time: '20:00', line1: 55, line2: 48, line3: 52 },
 ];
 
-export const hitlValidationTasks = [
+export const hitlValidationTasks: HitlValidationTask[] = [
   {
     id: 'hitl-1',
     title: 'Confirm anomaly in Machine M-102 readings',

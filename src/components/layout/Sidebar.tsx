@@ -19,11 +19,15 @@ import {
   X,
   HelpCircle,
   BookOpen,
-  CalendarClock,
+  Share2,
+  LogOut,
   Accessibility,
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useRole } from '../../contexts/RoleContext';
+import { useCompany } from '../../contexts/CompanyContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { loadAdminConfig, isPageVisible } from '../../data/adminConfig';
 import { AccessibilityPanelContent } from '../../contexts/AccessibilityContext';
 import Tooltip from '../shared/Tooltip';
 
@@ -106,6 +110,11 @@ interface SidebarProps {
 export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   const { t } = useLanguage();
   const { role, config, hasPermission } = useRole();
+  const { company, config: companyConfig } = useCompany();
+  const { currentUser, logout } = useAuth();
+  // Admin panelinin sayfa gorunurlugu — yalnizca daraltir, izinleri genisletmez
+  const adminConfig = loadAdminConfig(company);
+  const pageOn = (key: string) => isPageVisible(adminConfig, role, key);
   const [showAccessibility, setShowAccessibility] = useState(false);
 
   const handleNavigate = () => {
@@ -122,16 +131,24 @@ export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   };
 
   const cdtChildren: ChildItem[] = [
-    { to: '/digital-twin/value-chain', labelKey: 'nav.valueChain', icon: <Link2 className="w-4 h-4" /> },
-    ...(hasPermission('canAccessCDTSimulations') ? [
+    ...(pageOn('value-chain') ? [
+      { to: '/digital-twin/value-chain', labelKey: 'nav.valueChain', icon: <Link2 className="w-4 h-4" /> },
+    ] : []),
+    ...(hasPermission('canAccessCDTSimulations') && pageOn('value-chain-sim') ? [
       { to: '/digital-twin/value-chain-sim', labelKey: 'nav.valueChainSim', icon: <Play className="w-4 h-4" /> },
     ] : []),
-    { to: '/digital-twin/manufacturing', labelKey: 'nav.manufacturing', icon: <Factory className="w-4 h-4" /> },
-    ...(hasPermission('canAccessCDTSimulations') ? [
+    ...(pageOn('manufacturing') ? [
+      { to: '/digital-twin/manufacturing', labelKey: 'nav.manufacturing', icon: <Factory className="w-4 h-4" /> },
+    ] : []),
+    ...(hasPermission('canAccessCDTSimulations') && pageOn('manufacturing-sim') ? [
       { to: '/digital-twin/manufacturing-sim', labelKey: 'nav.manufacturingSim', icon: <Settings className="w-4 h-4" /> },
     ] : []),
-    { to: '/digital-twin/logistics', labelKey: 'nav.logistics', icon: <Truck className="w-4 h-4" /> },
-    { to: '/digital-twin/product', labelKey: 'nav.product', icon: <Package className="w-4 h-4" /> },
+    ...(pageOn('logistics') ? [
+      { to: '/digital-twin/logistics', labelKey: 'nav.logistics', icon: <Truck className="w-4 h-4" /> },
+    ] : []),
+    ...(pageOn('product') ? [
+      { to: '/digital-twin/product', labelKey: 'nav.product', icon: <Package className="w-4 h-4" /> },
+    ] : []),
   ];
 
   return (
@@ -158,9 +175,16 @@ export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                 alt="SMAP Logo"
                 className="w-10 h-10"
               />
-              <div>
+              <div className="min-w-0">
                 <h1 className="font-semibold text-surface-900">SMAP</h1>
                 <p className="text-xs text-surface-500">DMaaST Platform</p>
+                {/* Hangi use case icin acildigi — Işıl karari 2026-08-30 */}
+                <span
+                  className={`mt-1 inline-block rounded-full border px-2 py-0.5 text-[10px] font-semibold ${companyConfig.accent}`}
+                  title={`${companyConfig.fullName} — ${companyConfig.erp}`}
+                >
+                  {companyConfig.fullName}
+                </span>
               </div>
             </div>
             <Tooltip content="Close menu">
@@ -194,7 +218,7 @@ export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
           />
 
           {/* Layer 3: Decision Support (MO-DSS) - Operator erişemez */}
-          {hasPermission('canAccessMODSS') && (
+          {hasPermission('canAccessMODSS') && pageOn('mo-dss') && (
             <NavItem
               to="/decision-support"
               icon={<BrainCircuit className="w-5 h-5" />}
@@ -202,13 +226,12 @@ export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
               onNavigate={handleNavigate}
               children={[
                 { to: '/decision-support/mo-dss', labelKey: 'nav.moDss', icon: <Target className="w-4 h-4" /> },
-                { to: '/decision-support/scheduling', labelKey: 'nav.scheduling', icon: <CalendarClock className="w-4 h-4" /> },
               ]}
             />
           )}
 
           {/* Sustainability - Operator erişemez */}
-          {hasPermission('canAccessSustainability') && (
+          {hasPermission('canAccessSustainability') && pageOn('sustainability') && (
             <NavItem
               to="/sustainability"
               icon={<Leaf className="w-5 h-5" />}
@@ -216,6 +239,17 @@ export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
               onNavigate={handleNavigate}
             />
           )}
+
+          {/* Decision Knowledge Graph - mock içerik (kullanıcı kararı 2026-09-17; önceki: planned, Işıl 2026-08-30) */}
+          {pageOn('knowledge-graph') && (
+            <NavItem
+              to="/knowledge-graph"
+              icon={<Share2 className="w-5 h-5" />}
+              label={t('nav.knowledgeGraph')}
+              onNavigate={handleNavigate}
+            />
+          )}
+
 
           {/* Separator */}
           <div className="my-2 border-t border-surface-200" />
@@ -255,15 +289,26 @@ export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
             <span>Accessibility</span>
           </button>
 
+          {/* Kimlik + cikis — rol artik burada DEGISTIRILEMEZ, admin panelinden atanir */}
           <div className="flex items-center gap-3 px-3 py-2">
-            <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
+            <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
               <span className="text-sm font-medium text-primary-700">{roleInitials[role] || 'U'}</span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-surface-900 break-words">{config.label}</p>
-              <p className="text-xs text-surface-500 break-words">{config.description}</p>
+              <p className="text-sm font-medium text-surface-900 break-words">
+                {currentUser?.displayName ?? config.label}
+              </p>
+              <p className="text-xs text-surface-500 break-words">{config.label}</p>
             </div>
           </div>
+
+          <button
+            onClick={logout}
+            className="w-full flex items-center gap-3 px-3 py-2 text-sm text-surface-600 hover:bg-surface-100 rounded-lg transition-colors"
+          >
+            <LogOut className="w-5 h-5" />
+            <span>Sign out</span>
+          </button>
         </div>
       </aside>
 

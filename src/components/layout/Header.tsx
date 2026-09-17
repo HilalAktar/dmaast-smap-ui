@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { Bell, Search, ChevronDown, RefreshCw, Globe2, Users, ClipboardCheck } from 'lucide-react';
+import { Bell, Search, ChevronDown, RefreshCw, Globe2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { recentAlerts, hitlValidationTasks } from '../../data/mockData';
+import { getCompanyAlerts } from '../../data/alerts';
+import { useCompany } from '../../contexts/CompanyContext';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { useRole } from '../../contexts/RoleContext';
 import SystemStatus from '../shared/SystemStatus';
 import Tooltip from '../shared/Tooltip';
 
@@ -19,37 +19,23 @@ const languages = [
   { value: 'fr', label: 'Français' },
   { value: 'tr', label: 'Türkçe' },
   { value: 'zh', label: '中文' },
+  { value: 'da', label: 'Dansk' },
 ] as const;
 
 type LanguageValue = typeof languages[number]['value'];
 
-const roleLabels: Record<string, string> = {
-  manager: 'Manager',
-  engineer: 'Engineer',
-  operator: 'Operator',
-  admin: 'Admin',
-  developer: 'Developer',
-  superuser: 'Superuser',
-};
-
 export default function Header({ title, subtitle }: HeaderProps) {
   const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false);
-  const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
   const languageDropdownRef = useRef<HTMLDivElement>(null);
-  const roleDropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { language, setLanguage, t } = useLanguage();
-  const { role, setRole, allRoles } = useRole();
-  const unacknowledgedAlerts = recentAlerts.filter(a => !a.acknowledged).length;
-  const pendingHitlTasks = hitlValidationTasks.filter(t => t.status === 'pending').length;
+  const { company } = useCompany();
+  const unacknowledgedAlerts = getCompanyAlerts(company).filter(a => !a.acknowledged).length;
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (languageDropdownRef.current && !languageDropdownRef.current.contains(event.target as Node)) {
         setIsLanguageDropdownOpen(false);
-      }
-      if (roleDropdownRef.current && !roleDropdownRef.current.contains(event.target as Node)) {
-        setIsRoleDropdownOpen(false);
       }
     }
 
@@ -80,40 +66,6 @@ export default function Header({ title, subtitle }: HeaderProps) {
 
           <SystemStatus health="online" />
 
-          <div className="relative hidden md:block" ref={roleDropdownRef}>
-            <Tooltip content="Select your role" position="bottom">
-              <button
-                onClick={() => setIsRoleDropdownOpen(!isRoleDropdownOpen)}
-                className="flex items-center gap-2 px-3 py-2 text-sm border border-surface-200 rounded-lg hover:bg-surface-50 transition-colors"
-                aria-label="Select role"
-              >
-                <Users className="w-4 h-4 text-surface-500" />
-                <span className="hidden lg:inline break-words">{roleLabels[role]}</span>
-                <ChevronDown className="w-4 h-4 text-surface-400" />
-              </button>
-            </Tooltip>
-
-            {isRoleDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-44 bg-white border border-surface-200 rounded-lg shadow-lg py-1 z-50">
-                {allRoles.map((r) => (
-                  <button
-                    key={r}
-                    onClick={() => {
-                      setRole(r);
-                      setIsRoleDropdownOpen(false);
-                    }}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-primary-50 transition-colors ${
-                      role === r
-                        ? 'text-primary-600 font-medium bg-primary-50'
-                        : 'text-surface-700'
-                    }`}
-                  >
-                    {roleLabels[r]}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
 
           <div className="relative" ref={languageDropdownRef}>
             <Tooltip content={t('header.language')} position="bottom">
@@ -149,21 +101,6 @@ export default function Header({ title, subtitle }: HeaderProps) {
               </div>
             )}
           </div>
-
-          <Tooltip content={`HITL Validation Tasks (${pendingHitlTasks} pending)`} position="bottom">
-            <button
-              onClick={() => navigate('/')}
-              className="p-2 text-surface-500 hover:text-surface-700 hover:bg-surface-100 rounded-lg transition-colors relative"
-              aria-label="HITL validation tasks"
-            >
-              <ClipboardCheck className="w-5 h-5" />
-              {pendingHitlTasks > 0 && (
-                <span className="absolute top-1 right-1 w-4 h-4 bg-amber-500 text-white text-xs rounded-full flex items-center justify-center">
-                  {pendingHitlTasks}
-                </span>
-              )}
-            </button>
-          </Tooltip>
 
           <Tooltip content={t('header.refresh')} position="bottom">
             <button

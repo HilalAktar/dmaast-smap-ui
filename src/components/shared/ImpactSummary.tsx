@@ -27,16 +27,6 @@ const categoryIcons: Record<string, LucideIcon> = {
   other: TrendingUp,
 };
 
-const categoryLabels: Record<string, string> = {
-  cost: 'Cost Impact',
-  production: 'Production Impact',
-  energy: 'Energy Impact',
-  sustainability: 'Sustainability Impact',
-  quality: 'Quality Impact',
-  time: 'Time Impact',
-  other: 'Other Impact',
-};
-
 export default function ImpactSummary({
   impacts,
   title = 'Key Impacts',

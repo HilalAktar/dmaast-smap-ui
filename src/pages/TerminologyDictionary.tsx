@@ -18,7 +18,6 @@ import {
 import Header from '../components/layout/Header';
 import HelpPopover from '../components/shared/HelpPopover';
 import Tooltip from '../components/shared/Tooltip';
-import { useLanguage } from '../contexts/LanguageContext';
 import { useRole } from '../contexts/RoleContext';
 
 type TermCategory = 'General' | 'Technical' | 'Business' | 'Module-specific';
@@ -71,7 +70,6 @@ const categoryStyles: Record<TermCategory, { bg: string; text: string; border: s
 const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
 export default function TerminologyDictionary() {
-  const { t } = useLanguage();
   const { role } = useRole();
   const [terms, setTerms] = useState<Term[]>(initialTerms);
   const [searchQuery, setSearchQuery] = useState('');

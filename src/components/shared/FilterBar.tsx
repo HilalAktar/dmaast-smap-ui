@@ -1,7 +1,6 @@
 import { Filter, Calendar, ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 import AutoRefresh from './AutoRefresh';
-import { RoleSelector } from '../../contexts/RoleContext';
 
 interface FilterOption {
   value: string;
@@ -15,7 +14,6 @@ interface FilterBarProps {
   onFilterChange?: (filters: Record<string, string>) => void;
   onRefresh?: () => void;
   showAutoRefresh?: boolean;
-  showRoleSelector?: boolean;
 }
 
 export default function FilterBar({
@@ -40,7 +38,6 @@ export default function FilterBar({
   onFilterChange,
   onRefresh,
   showAutoRefresh = true,
-  showRoleSelector = true,
 }: FilterBarProps) {
   const [selectedTimeRange, setSelectedTimeRange] = useState('7d');
   const [selectedLine, setSelectedLine] = useState('all');
@@ -145,11 +142,6 @@ export default function FilterBar({
       </div>
 
       <div className="flex items-center gap-3 lg:ml-auto">
-        {showRoleSelector && (
-          <div className="hidden md:block">
-            <RoleSelector />
-          </div>
-        )}
 
         {showAutoRefresh && (
           <AutoRefresh

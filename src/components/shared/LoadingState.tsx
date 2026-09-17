@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { useLanguage } from '../../contexts/LanguageContext';
 
 export function LoadingSpinner({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
@@ -16,10 +17,17 @@ export function LoadingSpinner({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
   );
 }
 
-export function LoadingSkeleton({ className = '' }: { className?: string }) {
+export function LoadingSkeleton({
+  className = '',
+  style,
+}: {
+  className?: string;
+  style?: CSSProperties;
+}) {
   return (
     <div
       className={`bg-surface-200 rounded animate-pulse ${className}`}
+      style={style}
       role="status"
       aria-label="Loading"
     />

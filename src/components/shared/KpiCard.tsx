@@ -4,6 +4,8 @@ import { TrendingUp, TrendingDown, Minus, Info } from 'lucide-react';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { Link } from 'react-router-dom';
 import type { KpiData, KpiCluster } from '../../types';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { tKpiLabel, tCluster, tUnit } from '../../i18n/dataLabels';
 
 interface KpiCardProps {
   kpi: KpiData;
@@ -19,9 +21,15 @@ const clusterColors: Record<KpiCluster, { bg: string; border: string; text: stri
 };
 
 export default function KpiCard({ kpi, size = 'md' }: KpiCardProps) {
+  const { t } = useLanguage();
   const [showInfo, setShowInfo] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
   const colors = clusterColors[kpi.cluster];
+  // Görünen metin aktif dile çözülür; kpi.label mantıkta (lower-is-better,
+  // hedef yüzdesi) DEĞİŞMEDEN kaynak dilde kullanılmaya devam eder.
+  const displayLabel = tKpiLabel(t, kpi);
+  const displayUnit = tUnit(t, kpi.unit);
+  const displayCluster = tCluster(t, kpi.cluster);
   const sparklineData = kpi.sparklineData?.map((value, index) => ({ index, value })) || [];
   const hasMetadata = kpi.definition || kpi.dataSource || kpi.helpUrl;
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -117,7 +125,7 @@ export default function KpiCard({ kpi, size = 'md' }: KpiCardProps) {
   return (
     <div className={`kpi-card border-l-4 ${colors.border} ${sizeClasses[size]} ${cardHeight[size]} flex flex-col overflow-hidden relative`}>
       <div className="flex items-start justify-between mb-2 flex-shrink-0">
-        <span className="text-sm font-medium text-surface-600 pr-2 min-w-0 break-words leading-tight">{kpi.label}</span>
+        <span className="text-sm font-medium text-surface-600 pr-2 min-w-0 break-words leading-tight">{displayLabel}</span>
         <div className="flex items-center gap-1.5 flex-shrink-0">
           {hasMetadata && (
             <>
@@ -127,7 +135,7 @@ export default function KpiCard({ kpi, size = 'md' }: KpiCardProps) {
                 onMouseEnter={() => { cancelClose(); setShowInfo(true); }}
                 onMouseLeave={scheduleClose}
                 className="text-surface-400 hover:text-surface-600 transition-colors"
-                aria-label={`Info about ${kpi.label}`}
+                aria-label={`${t('dcard.info')} ${displayLabel}`}
               >
                 <Info className="w-4 h-4" />
               </button>
@@ -140,18 +148,18 @@ export default function KpiCard({ kpi, size = 'md' }: KpiCardProps) {
                   style={{ top: popoverPos.top, left: popoverPos.left, width: 272 }}
                 >
                   <div className="px-3 pt-2.5 pb-2 bg-surface-50 border-b border-surface-100">
-                    <span className="text-xs font-bold text-surface-800">{kpi.label}</span>
+                    <span className="text-xs font-bold text-surface-800">{displayLabel}</span>
                   </div>
                   <div className="p-3 space-y-2.5">
                     {kpi.definition && (
                       <div>
-                        <span className="text-xs font-semibold text-surface-600 uppercase tracking-wide">Definition</span>
+                        <span className="text-xs font-semibold text-surface-600 uppercase tracking-wide">{t('dcard.definition')}</span>
                         <p className="text-xs text-surface-500 mt-0.5 leading-relaxed">{kpi.definition}</p>
                       </div>
                     )}
                     {kpi.dataSource && (
                       <div>
-                        <span className="text-xs font-semibold text-surface-600 uppercase tracking-wide">Data Source</span>
+                        <span className="text-xs font-semibold text-surface-600 uppercase tracking-wide">{t('dcard.dataSource')}</span>
                         <p className="text-xs text-surface-500 mt-0.5">{kpi.dataSource}</p>
                       </div>
                     )}
@@ -161,7 +169,7 @@ export default function KpiCard({ kpi, size = 'md' }: KpiCardProps) {
                           to={kpi.helpUrl}
                           className="text-xs font-medium text-primary-600 hover:text-primary-700 transition-colors"
                         >
-                          View help materials →
+                          {t('dcard.viewHelp')}
                         </Link>
                       </div>
                     )}
@@ -172,7 +180,7 @@ export default function KpiCard({ kpi, size = 'md' }: KpiCardProps) {
             </>
           )}
           <span className={`text-xs px-2 py-0.5 rounded-full ${colors.bg} ${colors.text}`}>
-            {kpi.cluster}
+            {displayCluster}
           </span>
         </div>
       </div>
@@ -183,7 +191,7 @@ export default function KpiCard({ kpi, size = 'md' }: KpiCardProps) {
             <span className="text-2xl font-semibold text-surface-900">
               {typeof kpi.value === 'number' ? kpi.value.toLocaleString() : kpi.value}
             </span>
-            <span className="text-sm text-surface-500">{kpi.unit}</span>
+            <span className="text-sm text-surface-500">{displayUnit}</span>
           </div>
 
           {kpi.trend !== undefined && (
@@ -217,7 +225,7 @@ export default function KpiCard({ kpi, size = 'md' }: KpiCardProps) {
       {progress !== null && (
         <div className="mt-2 flex-shrink-0">
           <div className="flex items-center justify-between text-xs text-surface-500 mb-1">
-            <span className="truncate">Target: {kpi.target}{kpi.unit}</span>
+            <span className="truncate">{t('dcard.target')}: {kpi.target}{displayUnit}</span>
             <span className="flex-shrink-0 ml-2">{progress.toFixed(0)}%</span>
           </div>
           <div className="h-1.5 bg-surface-100 rounded-full overflow-hidden">

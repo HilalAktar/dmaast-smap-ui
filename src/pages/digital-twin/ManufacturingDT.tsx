@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import {
   BarChart,
   Bar,
@@ -10,36 +9,157 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  RadialBarChart,
-  RadialBar,
   LabelList,
 } from 'recharts';
-import { Cpu, Activity, Thermometer, Zap, FlaskConical, ChevronDown, ChevronUp, RotateCcw, Play, X, CheckCircle } from 'lucide-react';
 import Header from '../../components/layout/Header';
-import HelpPopover from '../../components/shared/HelpPopover';
 import FilterBar from '../../components/shared/FilterBar';
 import KpiCard from '../../components/shared/KpiCard';
 import ExportPanel from '../../components/shared/ExportPanel';
-import PageCustomizer from '../../components/shared/PageCustomizer';
-import PageToolbar from '../../components/shared/PageToolbar';
 import { getVisibleKpis } from '../../data/pageLayouts';
 import { usePageLayout } from '../../hooks/usePageLayout';
-import { default as TooltipUI } from '../../components/shared/Tooltip';
+import { useLanguage } from '../../contexts/LanguageContext';
 import { productionTrendData } from '../../data/mockData';
 
-const oeeBreakdown = [
-  { name: 'Availability', value: 95.2, fill: '#0066b3' },
-  { name: 'Performance', value: 92.5, fill: '#2a9d8f' },
-  { name: 'Quality', value: 99.1, fill: '#10b981' },
+/* ---------------------------------------------------------------------------
+ * OEE ve Makine Durumu — GERI ALINDI 2026-08-31 (Isil onayi).
+ *
+ * 2026-08-30'da "veri yok" gerekcesiyle cikarilmislardi. O gerekce ELIMIZDEKI
+ * ERP IHRACI icin dogruydu, ama HEDEF VERI MODELI icin degil: KAM Data sources
+ * belgesindeki `unit_states` yapisi PackML durumu + UnitMode (Production ·
+ * Maintenance · Manual · Changeover) tasiyor, yani Availability'yi saglıyor.
+ * Ayrica OEE'yi KAM tarafinda koordinator (IDE), JPB tarafinda JPB kendisi
+ * KPI tablosuna eklemis.
+ *
+ * 🔴 UYDURMA RAKAM YOK. Bu kartlar bilerek DEGER GOSTERMIYOR; her bacagin
+ * arkasindaki kaynagi ve o kaynagin bugun bagli olup olmadigini gosteriyorlar.
+ * Amac kapsam sorusunu cevaplamak: "boyle bir veri API'dan gelse arayuzde
+ * karsiligi var mi?" — evet, yeri burasi.
+ * Denetim: work/smap-arayuz/02-kpi-veri-kaynagi-denetimi.md
+ * ------------------------------------------------------------------------- */
+
+interface SourceLeg {
+  label: string;
+  /** Bugun bagli mi — ERP ihracindan hesaplanabiliyor mu */
+  connected: boolean;
+  /** Arkasindaki gercek tablo/alan */
+  source: string;
+  note: string;
+}
+
+const OEE_LEGS: SourceLeg[] = [
+  {
+    label: 'Availability',
+    connected: false,
+    source: 'unit_states — modes.production vs modes.maintenance / changeover',
+    note: 'Arrives with the equipment stream (Kafka). Not present in the ERP extract.',
+  },
+  {
+    label: 'Performance',
+    connected: true,
+    source: 'JPB · POINT.TPSPASSE against GAMME planned time',
+    note: 'Computable today from the shopfloor time tracking.',
+  },
+  {
+    label: 'Quality',
+    connected: true,
+    source: 'JPB · POINT.NBPIEABIME / NBPIE · CtrlCommande.TypeDefaut',
+    note: 'Computable today: 595,785 damaged of 1,025,229,565 produced (0.058%).',
+  },
 ];
 
-const machineData = [
-  { id: 'M-101', name: 'CNC Mill 1', status: 'running', oee: 92, temp: 68, power: 45 },
-  { id: 'M-102', name: 'CNC Mill 2', status: 'warning', oee: 78, temp: 85, power: 52 },
-  { id: 'M-103', name: 'Assembly Robot', status: 'running', oee: 95, temp: 42, power: 38 },
-  { id: 'M-104', name: 'Press Machine', status: 'running', oee: 88, temp: 55, power: 65 },
-  { id: 'M-105', name: 'Inspection Unit', status: 'idle', oee: 0, temp: 25, power: 5 },
-  { id: 'M-106', name: 'Packaging Line', status: 'running', oee: 91, temp: 35, power: 28 },
+/** PackML UnitMode'lari — unit_states.modes altindaki dort mod */
+const UNIT_MODES: SourceLeg[] = [
+  { label: 'Production', connected: false, source: 'unit_states.modes.production', note: 'Normal production mode.' },
+  { label: 'Maintenance', connected: false, source: 'unit_states.modes.maintenance', note: 'Equipment under maintenance.' },
+  { label: 'Manual', connected: false, source: 'unit_states.modes.manual', note: 'Run under manual control.' },
+  { label: 'Changeover', connected: false, source: 'unit_states.modes.changeover', note: 'Fixtures / components being changed.' },
+];
+
+/*
+ * i18n eşlemeleri (T4.2). Veri dizileri (OEE_LEGS / UNIT_MODES / MATERIAL_READINESS)
+ * DEĞİŞTİRİLMEDİ: sayılar, `source` provenance ve `connected` bayrakları korunur.
+ * Yalnız görünen etiket/not/rozet metni çevrilir. Ölçülmüş rakam taşıyan Quality
+ * notu map'te yer almaz → `leg.note` kaynak dilinde gösterilir.
+ */
+const legLabelKeys: Record<string, string> = {
+  Availability: 'mfg.legAvailability',
+  Performance: 'mfg.legPerformance',
+  Quality: 'mfg.legQuality',
+  Production: 'mfg.modeProduction',
+  Maintenance: 'mfg.modeMaintenance',
+  Manual: 'mfg.modeManual',
+  Changeover: 'mfg.modeChangeover',
+};
+const legNoteKeys: Record<string, string> = {
+  Availability: 'mfg.noteAvailability',
+  Performance: 'mfg.notePerformance',
+  Production: 'mfg.noteModeProduction',
+  Maintenance: 'mfg.noteModeMaintenance',
+  Manual: 'mfg.noteModeManual',
+  Changeover: 'mfg.noteModeChangeover',
+};
+const matLabelKeys: Record<string, string> = {
+  'Completely Issued': 'mfg.matCompletelyIssued',
+  'Partially Issued': 'mfg.matPartiallyIssued',
+  'Not Reserved': 'mfg.matNotReserved',
+};
+
+function SourceLegRow({ leg }: { leg: SourceLeg }) {
+  const { t } = useLanguage();
+  const labelKey = legLabelKeys[leg.label];
+  const noteKey = legNoteKeys[leg.label];
+  return (
+    <div className="flex items-start gap-3 border-b border-surface-100 py-3 last:border-b-0">
+      <span
+        className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
+          leg.connected ? 'bg-green-500' : 'bg-surface-300'
+        }`}
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-surface-900">{labelKey ? t(labelKey) : leg.label}</span>
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+              leg.connected
+                ? 'bg-green-50 text-green-700 border border-green-200'
+                : 'bg-surface-100 text-surface-500 border border-surface-200'
+            }`}
+          >
+            {leg.connected ? t('mfg.sourceAvailable') : t('mfg.awaitingStream')}
+          </span>
+        </div>
+        <p className="mt-0.5 text-sm text-surface-600">{noteKey ? t(noteKey) : leg.note}</p>
+        <p className="mt-1 font-mono text-xs text-surface-400">{leg.source}</p>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+ * KAM — Material Readiness.
+ * OLCULEN degerler: KAM IFS ihraci "Shop Orders  Assembly.xlsx", 970 is emri,
+ * kolon "Shop Order Material Summary Status" (tekil = 3).
+ * Bu kart uydurma sayi TASIMAZ; asagidaki adetler ham veriden sayilmistir.
+ * ------------------------------------------------------------------------- */
+const MATERIAL_READINESS = [
+  { label: 'Completely Issued', count: 760, bar: 'bg-green-500' },
+  { label: 'Partially Issued', count: 208, bar: 'bg-amber-500' },
+  { label: 'Not Reserved', count: 2, bar: 'bg-red-500' },
+];
+const MATERIAL_READINESS_TOTAL = MATERIAL_READINESS.reduce((s, x) => s + x.count, 0);
+
+/* ---------------------------------------------------------------------------
+ * JPB — Actual vs Planned Hours.
+ * OLCULEN toplamlar: TBL_GAMME (244.290 satir), GA_NBH (plan) / GA_NBHR (fiili),
+ * COFRAIS (operasyon faz kodu) bazinda toplanmistir. Saat cinsinden.
+ * DISARIDA BIRAKILANLAR: LIVRA (plan 147 s / fiili 50.551 s) ve OUV10
+ * (plan 7 s / fiili 43.930 s) — bu fazlarda plan saati tutulmuyor, sapma anlamsiz.
+ * ------------------------------------------------------------------------- */
+const ACTUAL_VS_PLANNED = [
+  { phase: 'USI10', planned: 165626, actual: 190455 },
+  { phase: 'CONTR', planned: 66677, actual: 29144 },
+  { phase: 'CARRE', planned: 26365, actual: 26066 },
+  { phase: 'EBAVM', planned: 26019, actual: 24088 },
 ];
 
 const cycleTimeData = [
@@ -50,425 +170,31 @@ const cycleTimeData = [
   { station: 'Station 5', actual: 48, target: 45 },
 ];
 
-function MachineCard({ machine }: { machine: typeof machineData[0] }) {
-  const statusConfig = {
-    running: { bg: 'bg-green-500', text: 'Running', textColor: 'text-green-700', bgLight: 'bg-green-50' },
-    warning: { bg: 'bg-amber-500', text: 'Warning', textColor: 'text-amber-700', bgLight: 'bg-amber-50' },
-    idle: { bg: 'bg-surface-400', text: 'Idle', textColor: 'text-surface-600', bgLight: 'bg-surface-50' },
-    stopped: { bg: 'bg-red-500', text: 'Stopped', textColor: 'text-red-700', bgLight: 'bg-red-50' },
-  };
-
-  const config = statusConfig[machine.status as keyof typeof statusConfig];
-
-  return (
-    <div className={`rounded-xl border border-surface-200 p-4 ${config.bgLight}`}>
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className={`w-2 h-2 rounded-full ${config.bg}`} />
-            <span className={`text-xs font-medium ${config.textColor}`}>{config.text}</span>
-          </div>
-          <h4 className="font-medium text-surface-900">{machine.name}</h4>
-          <span className="text-xs text-surface-500">{machine.id}</span>
-        </div>
-        <TooltipUI content="Machine details">
-          <Cpu className="w-5 h-5 text-surface-400" />
-        </TooltipUI>
-      </div>
-
-      <div className="space-y-2 mt-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <TooltipUI content="Overall Equipment Effectiveness">
-              <Activity className="w-4 h-4 text-surface-400" />
-            </TooltipUI>
-            <span className="text-xs text-surface-600">OEE</span>
-          </div>
-          <span className="text-sm font-medium text-surface-900">{machine.oee}%</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <TooltipUI content="Operating temperature">
-              <Thermometer className="w-4 h-4 text-surface-400" />
-            </TooltipUI>
-            <span className="text-xs text-surface-600">Temp</span>
-          </div>
-          <span className={`text-sm font-medium ${machine.temp > 80 ? 'text-red-600' : 'text-surface-900'}`}>
-            {machine.temp}°C
-          </span>
-        </div>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <TooltipUI content="Power consumption">
-              <Zap className="w-4 h-4 text-surface-400" />
-            </TooltipUI>
-            <span className="text-xs text-surface-600">Power</span>
-          </div>
-          <span className="text-sm font-medium text-surface-900">{machine.power} kW</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── What-if scenario types ──────────────────────────────────────────────────
-type WhatIfEvent =
-  | 'machine-offline'
-  | 'capacity-reduction'
-  | 'maintenance-window'
-  | 'demand-spike'
-  | 'supply-disruption';
-
-interface WhatIfForm {
-  event: WhatIfEvent;
-  targetMachine: string;
-  capacityPct: number;
-  durationHours: number;
-  demandMultiplier: number;
-  notes: string;
-}
-
-interface WhatIfResult {
-  oeeImpact: number;
-  throughputImpact: number;
-  energyImpact: number;
-  onTimeRisk: string;
-  recommendation: string;
-}
-
-const EVENT_LABELS: Record<WhatIfEvent, string> = {
-  'machine-offline': 'Machine Offline',
-  'capacity-reduction': 'Capacity Reduction',
-  'maintenance-window': 'Planned Maintenance',
-  'demand-spike': 'Demand Spike',
-  'supply-disruption': 'Supply Disruption',
-};
-
-const DEFAULT_FORM: WhatIfForm = {
-  event: 'machine-offline',
-  targetMachine: 'M-101',
-  capacityPct: 100,
-  durationHours: 4,
-  demandMultiplier: 100,
-  notes: '',
-};
-
-function computeWhatIfResult(form: WhatIfForm): WhatIfResult {
-  const cap = form.capacityPct / 100;
-  const dur = form.durationHours;
-  const demand = form.demandMultiplier / 100;
-
-  let oeeImpact = 0;
-  let throughputImpact = 0;
-  let energyImpact = 0;
-  let onTimeRisk = 'Low';
-  let recommendation = '';
-
-  switch (form.event) {
-    case 'machine-offline':
-      oeeImpact = -(dur * 1.8);
-      throughputImpact = -(dur * 2.5);
-      energyImpact = -(dur * 0.8);
-      onTimeRisk = dur >= 6 ? 'High' : dur >= 3 ? 'Medium' : 'Low';
-      recommendation = `Reroute jobs from ${form.targetMachine} to available machines. Consider overtime for ${Math.ceil(dur / 2)} hours.`;
-      break;
-    case 'capacity-reduction':
-      oeeImpact = -((1 - cap) * 30);
-      throughputImpact = -((1 - cap) * 40);
-      energyImpact = -((1 - cap) * 15);
-      onTimeRisk = cap < 0.6 ? 'High' : cap < 0.8 ? 'Medium' : 'Low';
-      recommendation = `At ${form.capacityPct}% capacity, prioritize high-value orders and defer non-critical batches.`;
-      break;
-    case 'maintenance-window':
-      oeeImpact = -(dur * 1.2);
-      throughputImpact = -(dur * 1.8);
-      energyImpact = dur * 0.3;
-      onTimeRisk = dur >= 8 ? 'Medium' : 'Low';
-      recommendation = `Schedule maintenance during off-peak shift. Pre-stage materials for fast restart.`;
-      break;
-    case 'demand-spike':
-      oeeImpact = demand > 1.2 ? -(demand - 1) * 10 : 0;
-      throughputImpact = (demand - 1) * 30;
-      energyImpact = (demand - 1) * 20;
-      onTimeRisk = demand > 1.3 ? 'High' : demand > 1.1 ? 'Medium' : 'Low';
-      recommendation = `+${Math.round((demand - 1) * 100)}% demand surge detected. Activate standby machines and extend shift hours.`;
-      break;
-    case 'supply-disruption':
-      throughputImpact = -(dur * 3);
-      oeeImpact = -(dur * 1.5);
-      energyImpact = -(dur * 1);
-      onTimeRisk = dur >= 4 ? 'High' : 'Medium';
-      recommendation = `Activate safety stock protocol. Contact alternative suppliers for ${form.targetMachine} dependencies.`;
-      break;
-  }
-
-  return {
-    oeeImpact: Math.max(-30, Math.round(oeeImpact * 10) / 10),
-    throughputImpact: Math.round(throughputImpact * 10) / 10,
-    energyImpact: Math.round(energyImpact * 10) / 10,
-    onTimeRisk,
-    recommendation,
-  };
-}
-
-function WhatIfPanel() {
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<WhatIfForm>(DEFAULT_FORM);
-  const [result, setResult] = useState<WhatIfResult | null>(null);
-  const [ran, setRan] = useState(false);
-
-  const update = <K extends keyof WhatIfForm>(key: K, value: WhatIfForm[K]) => {
-    setForm(prev => ({ ...prev, [key]: value }));
-    setResult(null);
-    setRan(false);
-  };
-
-  const handleRun = () => {
-    setResult(computeWhatIfResult(form));
-    setRan(true);
-  };
-
-  const handleReset = () => {
-    setForm(DEFAULT_FORM);
-    setResult(null);
-    setRan(false);
-  };
-
-  const riskColor = (risk: string) =>
-    risk === 'High' ? 'text-red-600 bg-red-50 border-red-200'
-    : risk === 'Medium' ? 'text-amber-600 bg-amber-50 border-amber-200'
-    : 'text-green-600 bg-green-50 border-green-200';
-
-  const impactColor = (val: number) => val >= 0 ? 'text-green-600' : 'text-red-600';
-
-  return (
-    <div className="bg-white rounded-xl shadow-card overflow-hidden">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-5 py-4 hover:bg-surface-50 transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-violet-100 rounded-lg">
-            <FlaskConical className="w-5 h-5 text-violet-600" />
-          </div>
-          <div className="text-left flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className="font-semibold text-surface-900">CDT What-if Scenario</h3>
-              <HelpPopover
-                text="Define hypothetical disruptive events (e.g., 'If Machine X goes offline for 6 hours') to forecast their impact on OEE, throughput, and energy. The system generates recommendations for mitigation."
-                linkTo="/help"
-                linkLabel="What-if tutorial"
-                position="bottom-right"
-              />
-            </div>
-            <p className="text-xs text-surface-500 mt-0.5">
-              Model disruptive events and forecast KPI impact before they occur
-            </p>
-          </div>
-        </div>
-        {open ? <ChevronUp className="w-4 h-4 text-surface-400" /> : <ChevronDown className="w-4 h-4 text-surface-400" />}
-      </button>
-
-      {open && (
-        <div className="border-t border-surface-100 p-5 space-y-5">
-
-          {/* Form */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-
-            {/* Event type */}
-            <div>
-              <label className="block text-xs font-semibold text-surface-600 uppercase tracking-wide mb-1.5">
-                Disruptive Event
-              </label>
-              <select
-                value={form.event}
-                onChange={e => update('event', e.target.value as WhatIfEvent)}
-                className="w-full px-3 py-2 text-sm border border-surface-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500 bg-white"
-              >
-                {(Object.keys(EVENT_LABELS) as WhatIfEvent[]).map(k => (
-                  <option key={k} value={k}>{EVENT_LABELS[k]}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Target machine */}
-            <div>
-              <label className="block text-xs font-semibold text-surface-600 uppercase tracking-wide mb-1.5">
-                Target Machine
-              </label>
-              <select
-                value={form.targetMachine}
-                onChange={e => update('targetMachine', e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-surface-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500 bg-white"
-              >
-                {machineData.map(m => (
-                  <option key={m.id} value={m.id}>{m.name} ({m.id})</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Duration */}
-            <div>
-              <label className="block text-xs font-semibold text-surface-600 uppercase tracking-wide mb-1.5">
-                Duration: <span className="text-violet-600 normal-case font-bold">{form.durationHours} hrs</span>
-              </label>
-              <input
-                type="range"
-                min={1} max={24} step={1}
-                value={form.durationHours}
-                onChange={e => update('durationHours', Number(e.target.value))}
-                className="w-full h-2 bg-surface-200 rounded-lg appearance-none cursor-pointer accent-violet-500"
-              />
-              <div className="flex justify-between text-xs text-surface-400 mt-0.5">
-                <span>1h</span><span>12h</span><span>24h</span>
-              </div>
-            </div>
-
-            {/* Capacity */}
-            {(form.event === 'capacity-reduction' || form.event === 'machine-offline') && (
-              <div>
-                <label className="block text-xs font-semibold text-surface-600 uppercase tracking-wide mb-1.5">
-                  Available Capacity: <span className="text-violet-600 font-bold">{form.capacityPct}%</span>
-                </label>
-                <input
-                  type="range"
-                  min={10} max={100} step={5}
-                  value={form.capacityPct}
-                  onChange={e => update('capacityPct', Number(e.target.value))}
-                  className="w-full h-2 bg-surface-200 rounded-lg appearance-none cursor-pointer accent-violet-500"
-                />
-                <div className="flex justify-between text-xs text-surface-400 mt-0.5">
-                  <span>10%</span><span>55%</span><span>100%</span>
-                </div>
-              </div>
-            )}
-
-            {/* Demand multiplier */}
-            {form.event === 'demand-spike' && (
-              <div>
-                <label className="block text-xs font-semibold text-surface-600 uppercase tracking-wide mb-1.5">
-                  Demand Level: <span className="text-violet-600 font-bold">{form.demandMultiplier}%</span>
-                </label>
-                <input
-                  type="range"
-                  min={100} max={200} step={5}
-                  value={form.demandMultiplier}
-                  onChange={e => update('demandMultiplier', Number(e.target.value))}
-                  className="w-full h-2 bg-surface-200 rounded-lg appearance-none cursor-pointer accent-violet-500"
-                />
-                <div className="flex justify-between text-xs text-surface-400 mt-0.5">
-                  <span>100%</span><span>150%</span><span>200%</span>
-                </div>
-              </div>
-            )}
-
-            {/* Notes */}
-            <div className="md:col-span-2 lg:col-span-1">
-              <label className="block text-xs font-semibold text-surface-600 uppercase tracking-wide mb-1.5">
-                Notes (optional)
-              </label>
-              <input
-                type="text"
-                value={form.notes}
-                onChange={e => update('notes', e.target.value)}
-                placeholder={`e.g., "If ${machineData.find(m => m.id === form.targetMachine)?.name} goes offline due to bearing failure..."`}
-                className="w-full px-3 py-2 text-sm border border-surface-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500"
-              />
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleRun}
-              className="flex items-center gap-2 px-5 py-2 text-sm font-medium bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors"
-            >
-              <Play className="w-4 h-4" />
-              Run Simulation
-            </button>
-            <button
-              onClick={handleReset}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm text-amber-600 hover:bg-amber-50 rounded-lg border border-amber-200 transition-colors"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              Reset
-            </button>
-          </div>
-
-          {/* Results */}
-          {ran && result && (
-            <div className="border border-violet-200 rounded-xl bg-violet-50 p-4 space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-semibold text-violet-900">
-                  Forecast Impact — {EVENT_LABELS[form.event]}
-                  {form.event !== 'demand-spike' && <span className="font-normal text-violet-700"> on {machineData.find(m => m.id === form.targetMachine)?.name}</span>}
-                </h4>
-                <button onClick={() => setRan(false)} className="text-violet-400 hover:text-violet-600">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* KPI impact grid */}
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  { label: 'OEE Impact', value: result.oeeImpact, unit: '%' },
-                  { label: 'Throughput Impact', value: result.throughputImpact, unit: ' units/day' },
-                  { label: 'Energy Impact', value: result.energyImpact, unit: ' kWh' },
-                ].map(item => (
-                  <div key={item.label} className="bg-white rounded-lg p-3 border border-violet-100">
-                    <p className="text-xs text-surface-500 mb-1">{item.label}</p>
-                    <p className={`text-xl font-bold ${impactColor(item.value)}`}>
-                      {item.value >= 0 ? '+' : ''}{item.value}{item.unit}
-                    </p>
-                  </div>
-                ))}
-              </div>
-
-              {/* On-time risk */}
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-semibold text-surface-600">On-Time Delivery Risk:</span>
-                <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${riskColor(result.onTimeRisk)}`}>
-                  {result.onTimeRisk}
-                </span>
-              </div>
-
-              {/* Recommendation */}
-              <div className="bg-white rounded-lg border border-violet-100 p-3 flex gap-2">
-                <CheckCircle className="w-4 h-4 text-violet-600 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-surface-700">{result.recommendation}</p>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function ManufacturingDT() {
+  const { t } = useLanguage();
   const layout = usePageLayout('manufacturing');
   const visibleKpis = getVisibleKpis(layout.items);
-  const showCharts = layout.isVisible('oee-breakdown') || layout.isVisible('production-output');
+  const showCharts = layout.isVisible('production-output');
 
   return (
     <div className="min-h-screen">
       <Header
-        title="Manufacturing Digital Twin"
-        subtitle="Real-time production monitoring and equipment status"
+        title={t('mfg.title')}
+        subtitle={t('mfg.subtitle')}
       />
-      <PageToolbar
-        onCustomize={() => layout.setShowCustomizer(true)}
-        trailing={
+      <div className="flex items-center justify-between bg-white border-b border-surface-200">
+        <div className="flex-1 min-w-0">
+          <FilterBar showAutoRefresh={true} />
+        </div>
+        <div className="pr-4 flex-shrink-0">
           <ExportPanel
-            reportTitle="Manufacturing Digital Twin Analysis Report"
+            reportTitle={t('mfg.exportReport')}
             onExport={(format, sections) => console.log('Exporting:', format, sections)}
           />
-        }
-      >
-        <FilterBar showRoleSelector={false} showAutoRefresh={true} />
-      </PageToolbar>
+        </div>
+      </div>
 
-      <div className="p-6 space-y-6" id="printable-content">
+      <div className="p-4 lg:p-6 space-y-4 lg:space-y-6" id="printable-content">
         {visibleKpis.length > 0 && (
           <div className={`grid gap-4 ${
             visibleKpis.length >= 4 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4' :
@@ -483,47 +209,9 @@ export default function ManufacturingDT() {
 
         {showCharts && (
         <div className="grid grid-cols-3 gap-6">
-          {layout.isVisible('oee-breakdown') && (
-          <div className="bg-white rounded-xl shadow-card p-5">
-            <h3 className="font-semibold text-surface-900 mb-4">OEE Breakdown</h3>
-            <div className="h-64 flex items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%">
-                <RadialBarChart
-                  cx="50%"
-                  cy="50%"
-                  innerRadius="30%"
-                  outerRadius="90%"
-                  data={oeeBreakdown}
-                  startAngle={180}
-                  endAngle={0}
-                >
-                  <RadialBar
-                    dataKey="value"
-                    cornerRadius={5}
-                    background={{ fill: '#f5f5f5' }}
-                  >
-                    <LabelList dataKey="value" position="end" fontSize={11} fill="#333" formatter={(v: number) => `${v}%`} />
-                  </RadialBar>
-                  <Tooltip />
-                  <Legend
-                    iconSize={10}
-                    layout="horizontal"
-                    verticalAlign="bottom"
-                    wrapperStyle={{ fontSize: '12px' }}
-                  />
-                </RadialBarChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="text-center mt-2">
-              <span className="text-3xl font-bold text-primary-600">87.5%</span>
-              <span className="text-sm text-surface-500 ml-2">Overall OEE</span>
-            </div>
-          </div>
-          )}
-
           {layout.isVisible('production-output') && (
-          <div className={`${layout.isVisible('oee-breakdown') ? 'col-span-2' : 'col-span-3'} bg-white rounded-xl shadow-card p-5`}>
-            <h3 className="font-semibold text-surface-900 mb-4">Production Output</h3>
+          <div className="col-span-3 bg-white rounded-xl shadow-card p-5">
+            <h3 className="font-semibold text-surface-900 mb-4">{t('mfg.productionOutput')}</h3>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={productionTrendData}>
@@ -532,10 +220,10 @@ export default function ManufacturingDT() {
                   <YAxis tick={{ fontSize: 12 }} stroke="#737373" />
                   <Tooltip />
                   <Legend />
-                  <Line type="monotone" dataKey="actual" stroke="#0066b3" strokeWidth={2} name="Actual">
+                  <Line type="monotone" dataKey="actual" stroke="#0066b3" strokeWidth={2} name={t('dt.actual')}>
                   <LabelList dataKey="actual" position="top" fontSize={10} fill="#0066b3" offset={8} />
                 </Line>
-                  <Line type="monotone" dataKey="target" stroke="#d4d4d4" strokeWidth={2} strokeDasharray="5 5" name="Target" />
+                  <Line type="monotone" dataKey="target" stroke="#d4d4d4" strokeWidth={2} strokeDasharray="5 5" name={t('dt.target')} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -544,51 +232,120 @@ export default function ManufacturingDT() {
         </div>
         )}
 
-        {layout.isVisible('machine-status') && (
+        {/* KAM — Material Readiness. Rakamlar KAM IFS ihracindan OLCULDU
+            (Shop Orders Assembly, 970 is emri, 'Shop Order Material Summary Status'). */}
+        {/* OEE — KPI tablolarinda tanimli (KAM: IDE · JPB: kendi). Deger yok, kaynak var. */}
+        {layout.isVisible('oee-breakdown') && (
         <div className="bg-white rounded-xl shadow-card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <h3 className="font-semibold text-surface-900">Machine Status</h3>
-              <HelpPopover
-                text="Machine status indicators show real-time equipment state. Green (Running) means normal operation, Amber (Warning) signals performance degradation or threshold alerts, Grey (Idle) indicates the machine is powered on but not producing, and Red (Stopped) means the machine is offline or faulted."
-                linkTo="/help"
-                position="bottom-right"
-              />
-            </div>
-            <div className="flex items-center gap-4 text-sm">
-              <TooltipUI content="Machines operating normally">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-green-500" />
-                  <span className="text-surface-600">Running (4)</span>
-                </div>
-              </TooltipUI>
-              <TooltipUI content="Machines requiring attention">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-amber-500" />
-                  <span className="text-surface-600">Warning (1)</span>
-                </div>
-              </TooltipUI>
-              <TooltipUI content="Machines not in use">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-surface-400" />
-                  <span className="text-surface-600">Idle (1)</span>
-                </div>
-              </TooltipUI>
-            </div>
+          <div className="mb-1 flex items-center justify-between">
+            <h3 className="font-semibold text-surface-900">{t('mfg.oeeTitle')}</h3>
+            <span className="text-xs text-surface-400">{t('mfg.oeeKpiBy')}</span>
           </div>
-          <div className="grid grid-cols-6 gap-4">
-            {machineData.map((machine) => (
-              <MachineCard key={machine.id} machine={machine} />
+          <p className="mb-3 text-sm text-surface-500">
+            {t('mfg.oeeDesc')}
+          </p>
+          <div>
+            {OEE_LEGS.map((leg) => (
+              <SourceLegRow key={leg.label} leg={leg} />
             ))}
           </div>
         </div>
         )}
 
-        {layout.isVisible('what-if-panel') && <WhatIfPanel />}
+        {/* Makine durumu — unit_states PackML modlari. */}
+        {layout.isVisible('machine-status') && (
+        <div className="bg-white rounded-xl shadow-card p-5">
+          <div className="mb-1 flex items-center justify-between">
+            <h3 className="font-semibold text-surface-900">{t('mfg.machineStatus')}</h3>
+            <span className="text-xs text-surface-400">unit_states · PackML</span>
+          </div>
+          <p className="mb-3 text-sm text-surface-500">
+            {t('mfg.machineStatusDesc')}
+          </p>
+          <div>
+            {UNIT_MODES.map((mode) => (
+              <SourceLegRow key={mode.label} leg={mode} />
+            ))}
+          </div>
+          <p className="mt-3 font-mono text-xs text-surface-400">
+            KAM · unit_states — unit_name / unit_id / window_start / duration / modes / throttled / raw_states
+          </p>
+        </div>
+        )}
+
+        {layout.isVisible('material-readiness') && (
+          <div className="bg-white rounded-xl shadow-card p-5">
+            <div className="flex items-baseline justify-between mb-1">
+              <h3 className="font-semibold text-surface-900">{t('mfg.materialReadiness')}</h3>
+              <span className="text-xs text-surface-400">
+                {t('common.source')}: Shop Orders · Material Summary Status
+              </span>
+            </div>
+            <p className="text-sm text-surface-500 mb-4">
+              {t('mfg.materialReadinessDesc')}
+            </p>
+
+            <div className="flex h-3 w-full overflow-hidden rounded-full bg-surface-100">
+              {MATERIAL_READINESS.map((s) => (
+                <div
+                  key={s.label}
+                  className={s.bar}
+                  style={{ width: `${(s.count / MATERIAL_READINESS_TOTAL) * 100}%` }}
+                  title={`${t(matLabelKeys[s.label])}: ${s.count}`}
+                />
+              ))}
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {MATERIAL_READINESS.map((s) => (
+                <div key={s.label} className="rounded-lg border border-surface-200 p-3">
+                  <div className="flex items-center gap-2">
+                    <span className={`h-2.5 w-2.5 rounded-full ${s.bar}`} />
+                    <span className="text-sm text-surface-600">{t(matLabelKeys[s.label])}</span>
+                  </div>
+                  <p className="mt-1 text-2xl font-semibold text-surface-900">{s.count}</p>
+                  <p className="text-xs text-surface-500">
+                    {t('mfg.pctOfTotal')
+                      .replace('{pct}', ((s.count / MATERIAL_READINESS_TOTAL) * 100).toFixed(1))
+                      .replace('{total}', String(MATERIAL_READINESS_TOTAL))}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* JPB — Actual vs Planned Hours. Toplamlar TBL_GAMME'den OLCULDU
+            (GA_NBH plan / GA_NBHR fiili, COFRAIS bazinda). Plan saati tutulmayan
+            operasyonlar (LIVRA, OUV*) disarida birakildi — sapma anlamsiz olurdu. */}
+        {layout.isVisible('actual-vs-planned-hours') && (
+          <div className="bg-white rounded-xl shadow-card p-5">
+            <div className="flex items-baseline justify-between mb-1">
+              <h3 className="font-semibold text-surface-900">{t('mfg.actualVsPlanned')}</h3>
+              <span className="text-xs text-surface-400">{t('common.source')}: Routing · GA_NBH / GA_NBHR</span>
+            </div>
+            <p className="text-sm text-surface-500 mb-4">
+              {t('mfg.actualVsPlannedDesc')}
+            </p>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={ACTUAL_VS_PLANNED}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
+                  <XAxis dataKey="phase" tick={{ fontSize: 12 }} stroke="#737373" />
+                  <YAxis tick={{ fontSize: 12 }} stroke="#737373" />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="planned" fill="#a3a3a3" name={t('dt.planned')} radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="actual" fill="#0066b3" name={t('dt.actual')} radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
 
         {layout.isVisible('cycle-time-analysis') && (
         <div className="bg-white rounded-xl shadow-card p-5">
-          <h3 className="font-semibold text-surface-900 mb-4">Cycle Time Analysis</h3>
+          <h3 className="font-semibold text-surface-900 mb-4">{t('mfg.cycleTime')}</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={cycleTimeData}>
@@ -597,10 +354,10 @@ export default function ManufacturingDT() {
                 <YAxis tick={{ fontSize: 12 }} stroke="#737373" />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="actual" fill="#0066b3" name="Actual (sec)" radius={[4, 4, 0, 0]}>
+                <Bar dataKey="actual" fill="#0066b3" name={t('mfg.actualSec')} radius={[4, 4, 0, 0]}>
                 <LabelList dataKey="actual" position="top" fontSize={10} fill="#333" />
               </Bar>
-                <Bar dataKey="target" fill="#d4d4d4" name="Target (sec)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="target" fill="#d4d4d4" name={t('mfg.targetSec')} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -608,15 +365,6 @@ export default function ManufacturingDT() {
         )}
       </div>
 
-      {layout.showCustomizer && (
-        <PageCustomizer
-          pageTitle="Manufacturing Digital Twin"
-          items={layout.items}
-          onSave={layout.saveLayout}
-          onClose={() => layout.setShowCustomizer(false)}
-          onResetToRoleDefault={layout.resetToRoleDefault}
-        />
-      )}
     </div>
   );
 }

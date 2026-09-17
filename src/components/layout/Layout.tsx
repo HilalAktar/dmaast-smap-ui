@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import Sidebar from './Sidebar';
+import { useCompany } from '../../contexts/CompanyContext';
 
 export default function Layout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const { config: companyConfig } = useCompany();
 
   return (
     <div className="flex min-h-screen">
@@ -24,6 +26,11 @@ export default function Layout() {
             className="w-10 h-10"
           />
           <span className="font-semibold text-surface-900">SMAP</span>
+          <span
+            className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${companyConfig.accent}`}
+          >
+            {companyConfig.fullName}
+          </span>
         </div>
         <main className="flex-1 overflow-auto">
           <Outlet />

@@ -24,6 +24,17 @@ export interface Alert {
   timestamp: Date;
   source: string;
   acknowledged: boolean;
+  /**
+   * Kartlardaki CardScope ile ayni kural: belirtilmemis olan iki
+   * arayuzde de gecerlidir. Isıl karari 2026-08-31.
+   */
+  scope?: 'kam' | 'jpb' | 'both';
+  /**
+   * Alarmin ARKASINDAKI gercek tablo/kolon ve olculen deger.
+   * KpiData.dataSource ile ayni sozlesme — rakam yer tutucu olabilir,
+   * dayanak olamaz.
+   */
+  dataSource?: string;
 }
 
 export interface NavigationItem {
@@ -71,4 +82,14 @@ export interface SimulationResult {
   objectives: Record<string, number>;
   timestamp: Date;
   duration: number;
+}
+
+export interface HitlValidationTask {
+  id: string;
+  title: string;
+  description: string;
+  type: 'anomaly' | 'confirm' | 'override';
+  source: string;
+  timestamp: Date;
+  status: 'pending' | 'approved' | 'rejected';
 }

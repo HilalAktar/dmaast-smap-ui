@@ -1,8 +1,6 @@
 import {
   BarChart,
   Bar,
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -13,22 +11,28 @@ import {
   Area,
   LabelList,
 } from 'recharts';
-import { Truck, Package, Clock, MapPin, AlertCircle, CheckCircle, ArrowUpRight } from 'lucide-react';
+import { Truck, Clock, MapPin, ArrowUpRight } from 'lucide-react';
 import Header from '../../components/layout/Header';
 import HelpPopover from '../../components/shared/HelpPopover';
 import FilterBar from '../../components/shared/FilterBar';
 import KpiCard from '../../components/shared/KpiCard';
-import PageCustomizer from '../../components/shared/PageCustomizer';
-import PageToolbar from '../../components/shared/PageToolbar';
 import { getVisibleKpis } from '../../data/pageLayouts';
 import { usePageLayout } from '../../hooks/usePageLayout';
+import { useLanguage } from '../../contexts/LanguageContext';
 
+// Sayısal değerler korunur; yalnız görünen durum etiketleri i18n anahtarına eşlenir.
 const shipmentData = [
   { status: 'In Transit', count: 234, color: 'bg-blue-500' },
   { status: 'Delivered', count: 1847, color: 'bg-green-500' },
   { status: 'Pending', count: 89, color: 'bg-amber-500' },
   { status: 'Delayed', count: 23, color: 'bg-red-500' },
 ];
+const shipLabelKeys: Record<string, string> = {
+  'In Transit': 'logi.shipInTransit',
+  Delivered: 'logi.shipDelivered',
+  Pending: 'logi.shipPending',
+  Delayed: 'logi.shipDelayed',
+};
 
 const transitTimeData = [
   { route: 'Route A', time: 1.8, target: 2.0 },
@@ -57,6 +61,7 @@ const activeShipments = [
 ];
 
 export default function LogisticsDT() {
+  const { t } = useLanguage();
   const layout = usePageLayout('logistics');
   const visibleKpis = getVisibleKpis(layout.items);
   const showVolumeTrend = layout.isVisible('volume-trend');
@@ -65,14 +70,12 @@ export default function LogisticsDT() {
   return (
     <div className="min-h-screen">
       <Header
-        title="Logistics Digital Twin"
-        subtitle="Transportation and distribution monitoring"
+        title={t('logi.title')}
+        subtitle={t('logi.subtitle')}
       />
-      <PageToolbar onCustomize={() => layout.setShowCustomizer(true)}>
-        <FilterBar showRoleSelector={false} />
-      </PageToolbar>
+        <FilterBar />
 
-      <div className="p-6 space-y-6">
+      <div className="p-4 lg:p-6 space-y-4 lg:space-y-6">
         {visibleKpis.length > 0 && (
           <div className={`grid gap-4 ${
             visibleKpis.length >= 4 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4' :
@@ -86,25 +89,25 @@ export default function LogisticsDT() {
         )}
 
         {layout.isVisible('shipment-stats') && (
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {shipmentData.map((item) => (
             <div key={item.status} className="bg-white rounded-xl shadow-card p-4">
               <div className="flex items-center justify-between mb-3">
                 <span className={`w-3 h-3 rounded-full ${item.color}`} />
-                <span className="text-xs text-surface-500">{item.status}</span>
+                <span className="text-xs text-surface-500">{t(shipLabelKeys[item.status])}</span>
               </div>
               <div className="text-3xl font-bold text-surface-900">{item.count}</div>
-              <div className="text-sm text-surface-500 mt-1">shipments</div>
+              <div className="text-sm text-surface-500 mt-1">{t('logi.shipments')}</div>
             </div>
           ))}
         </div>
         )}
 
         {(showVolumeTrend || showRoutePerformance) && (
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
           {showVolumeTrend && (
-          <div className={`${showRoutePerformance ? 'col-span-2' : 'col-span-3'} bg-white rounded-xl shadow-card p-5`}>
-            <h3 className="font-semibold text-surface-900 mb-4">Volume Trend</h3>
+          <div className={`${showRoutePerformance ? 'lg:col-span-2' : 'lg:col-span-3'} bg-white rounded-xl shadow-card p-5`}>
+            <h3 className="font-semibold text-surface-900 mb-4">{t('logi.volumeTrend')}</h3>
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={volumeTrendData} margin={{ top: 10, right: 20, bottom: 5, left: 0 }}>
@@ -120,7 +123,7 @@ export default function LogisticsDT() {
                     stroke="#0066b3"
                     fill="#0066b3"
                     fillOpacity={0.6}
-                    name="Inbound"
+                    name={t('dt.inbound')}
                   />
                   <Area
                     type="monotone"
@@ -129,7 +132,7 @@ export default function LogisticsDT() {
                     stroke="#2a9d8f"
                     fill="#2a9d8f"
                     fillOpacity={0.6}
-                    name="Outbound"
+                    name={t('dt.outbound')}
                   />
                 </AreaChart>
               </ResponsiveContainer>
@@ -139,7 +142,7 @@ export default function LogisticsDT() {
 
           {showRoutePerformance && (
           <div className="bg-white rounded-xl shadow-card p-5">
-            <h3 className="font-semibold text-surface-900 mb-4">Route Performance</h3>
+            <h3 className="font-semibold text-surface-900 mb-4">{t('logi.routePerformance')}</h3>
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={transitTimeData} layout="vertical" margin={{ top: 5, right: 20, bottom: 5, left: 5 }}>
@@ -148,10 +151,10 @@ export default function LogisticsDT() {
                   <YAxis dataKey="route" type="category" tick={{ fontSize: 11 }} stroke="#737373" width={55} />
                   <Tooltip />
                   <Legend />
-                  <Bar dataKey="time" fill="#0066b3" name="Time (days)" radius={[0, 4, 4, 0]}>
+                  <Bar dataKey="time" fill="#0066b3" name={t('logi.timeDays')} radius={[0, 4, 4, 0]}>
                     <LabelList position="right" fontSize={10} fill="#333" />
                   </Bar>
-                  <Bar dataKey="target" fill="#d4d4d4" name="Target (days)" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="target" fill="#d4d4d4" name={t('logi.targetDays')} radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -164,27 +167,27 @@ export default function LogisticsDT() {
         <div className="bg-white rounded-xl shadow-card p-5">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <h3 className="font-semibold text-surface-900">Active Shipments</h3>
+              <h3 className="font-semibold text-surface-900">{t('logi.activeShipments')}</h3>
               <HelpPopover
-                text="Monitor real-time logistics data including delivery accuracy, route performance, and active shipments. Status indicators show each shipment's current state — In Transit, Delayed, or Delivered."
+                text={t('logi.help')}
                 linkTo="/help"
-                linkLabel="Logistics DT guide"
+                linkLabel={t('logi.helpLink')}
                 position="bottom-right"
               />
             </div>
             <button className="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1">
-              View All <ArrowUpRight className="w-4 h-4" />
+              {t('dashboard.viewAll')} <ArrowUpRight className="w-4 h-4" />
             </button>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-[640px]">
               <thead>
                 <tr className="border-b border-surface-200">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-surface-600">Shipment ID</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-surface-600">Destination</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-surface-600">ETA</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-surface-600">Status</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-surface-600">Progress</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-surface-600">{t('logi.thShipmentId')}</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-surface-600">{t('logi.thDestination')}</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-surface-600">{t('logi.thEta')}</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-surface-600">{t('logi.thStatus')}</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-surface-600">{t('logi.thProgress')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -214,8 +217,8 @@ export default function LogisticsDT() {
                         shipment.status === 'delayed' ? 'badge-critical' :
                         'badge-warning'
                       }`}>
-                        {shipment.status === 'on-time' ? 'On Time' :
-                         shipment.status === 'delayed' ? 'Delayed' : 'At Risk'}
+                        {shipment.status === 'on-time' ? t('dt.onTime') :
+                         shipment.status === 'delayed' ? t('dt.delayed') : t('dt.atRisk')}
                       </span>
                     </td>
                     <td className="py-3 px-4">
@@ -242,15 +245,6 @@ export default function LogisticsDT() {
         )}
       </div>
 
-      {layout.showCustomizer && (
-        <PageCustomizer
-          pageTitle="Logistics Digital Twin"
-          items={layout.items}
-          onSave={layout.saveLayout}
-          onClose={() => layout.setShowCustomizer(false)}
-          onResetToRoleDefault={layout.resetToRoleDefault}
-        />
-      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   AlertTriangle,
   AlertCircle,
@@ -12,66 +12,23 @@ import {
   Check,
   Calendar,
   RotateCcw,
+  ShieldAlert,
 } from 'lucide-react';
 import Header from '../components/layout/Header';
 import HelpPopover from '../components/shared/HelpPopover';
 import Tooltip from '../components/shared/Tooltip';
-import { recentAlerts } from '../data/mockData';
+import { getCompanyAlerts } from '../data/alerts';
+import { useCompany } from '../contexts/CompanyContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { tAlertTitle, tAlertMessage, tTimeAgo } from '../i18n/dataLabels';
 import { useToast } from '../contexts/ToastContext';
-import type { Alert, AlertSeverity } from '../types';
+import type { AlertSeverity } from '../types';
 
-const additionalAlerts: Alert[] = [
-  {
-    id: 'alert-6',
-    title: 'Maintenance Due - Machine M-103',
-    message: 'Scheduled preventive maintenance in 48 hours',
-    severity: 'info',
-    timestamp: new Date(Date.now() - 300 * 60000),
-    source: 'Manufacturing DT',
-    acknowledged: false,
-  },
-  {
-    id: 'alert-7',
-    title: 'Inventory Reorder Point',
-    message: 'Component C-446 approaching reorder level',
-    severity: 'warning',
-    timestamp: new Date(Date.now() - 360 * 60000),
-    source: 'Value Chain DT',
-    acknowledged: true,
-  },
-  {
-    id: 'alert-8',
-    title: 'OEE Below Target',
-    message: 'Line 2 OEE at 78%, below 85% target for 2 consecutive hours',
-    severity: 'warning',
-    timestamp: new Date(Date.now() - 420 * 60000),
-    source: 'Manufacturing DT',
-    acknowledged: false,
-  },
-  {
-    id: 'alert-9',
-    title: 'Supplier Rating Updated',
-    message: 'Supplier B reliability score decreased to 87%',
-    severity: 'info',
-    timestamp: new Date(Date.now() - 480 * 60000),
-    source: 'Value Chain DT',
-    acknowledged: true,
-  },
-  {
-    id: 'alert-10',
-    title: 'Energy Threshold Exceeded',
-    message: 'Daily energy consumption 15% above target',
-    severity: 'warning',
-    timestamp: new Date(Date.now() - 540 * 60000),
-    source: 'Sustainability DT',
-    acknowledged: false,
-  },
-];
-
-const allAlerts = [...recentAlerts, ...additionalAlerts].sort(
-  (a, b) => b.timestamp.getTime() - a.timestamp.getTime()
-);
+/*
+ * Uydurma alarmlar 2026-08-31'de kaldirildi (Isil karari). Tek kaynak:
+ * data/alerts.ts — dordu de ham veriden olculmustur, her birinin
+ * dataSource alaninda tablo/kolon ve olculen buyukluk yazilidir.
+ */
 
 const severityConfig: Record<AlertSeverity, { icon: React.ElementType; bg: string; border: string; text: string; labelKey: string }> = {
   critical: { icon: AlertTriangle, bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', labelKey: 'alerts.filter.critical' },
@@ -79,22 +36,13 @@ const severityConfig: Record<AlertSeverity, { icon: React.ElementType; bg: strin
   info: { icon: Info, bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', labelKey: 'alerts.filter.info' },
 };
 
-function formatTimeAgo(date: Date): string {
-  const now = new Date();
-  const diff = now.getTime() - date.getTime();
-  const minutes = Math.floor(diff / 60000);
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
-
-  if (minutes < 60) return `${minutes}m ago`;
-  if (hours < 24) return `${hours}h ago`;
-  return `${days}d ago`;
-}
-
 export default function AlertCenter() {
   const { t } = useLanguage();
   const { showToast } = useToast();
-  const [alerts, setAlerts] = useState(allAlerts);
+  const { company, config: companyConfig } = useCompany();
+  // Alarmlar da kartlar gibi kapsamli: kullanici yalnizca kendi use case'ini gorur
+  const companyAlerts = useMemo(() => getCompanyAlerts(company), [company]);
+  const [alerts, setAlerts] = useState(companyAlerts);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSeverity, setSelectedSeverity] = useState<AlertSeverity | 'all'>('all');
   const [selectedSource, setSelectedSource] = useState<string>('all');
@@ -102,7 +50,7 @@ export default function AlertCenter() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
-  const sources = [...new Set(allAlerts.map(a => a.source))];
+  const sources = [...new Set(companyAlerts.map(a => a.source))];
 
   const filteredAlerts = alerts.filter(alert => {
     const matchesSearch = alert.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -150,6 +98,16 @@ export default function AlertCenter() {
             position="bottom-right"
           />
         </div>
+
+        {/* Ornek-alarm serdi — AdminPanel'deki demo serdiyle ayni dil. Isıl karari 2026-08-31 */}
+        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            <span className="font-semibold">{t('alerts.sampleTitle')}</span>{' '}
+            {t('alerts.sampleBody').replace('{company}', companyConfig.label)}
+          </span>
+        </div>
+
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
           <div className="bg-red-50 border border-red-200 rounded-xl p-3 lg:p-4">
             <div className="flex items-center justify-between">
@@ -325,22 +283,32 @@ export default function AlertCenter() {
                       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="font-medium text-surface-900 text-sm lg:text-base">{alert.title}</h4>
+                            <h4 className="font-medium text-surface-900 text-sm lg:text-base">{tAlertTitle(t, alert)}</h4>
                             <span className={`badge ${
                               alert.severity === 'critical' ? 'badge-critical' :
                               alert.severity === 'warning' ? 'badge-warning' : 'badge-info'
                             }`}>
                               {t(config.labelKey)}
                             </span>
+                            {/* Serit ekrandan cikinca da isaret kaybolmasin */}
+                            <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                              {t('alerts.sampleBadge')}
+                            </span>
                           </div>
-                          <p className="text-sm text-surface-600 mt-1">{alert.message}</p>
+                          <p className="text-sm text-surface-600 mt-1">{tAlertMessage(t, alert)}</p>
                           <div className="flex items-center gap-4 mt-2 text-xs text-surface-500">
                             <span className="flex items-center gap-1">
                               <Clock className="w-3 h-3" />
-                              {formatTimeAgo(alert.timestamp)}
+                              {tTimeAgo(t, alert.timestamp)}
                             </span>
-                            <span className="hidden sm:inline">Source: {alert.source}</span>
+                            <span className="hidden sm:inline">{t('common.source')}: {alert.source}</span>
                           </div>
+                          {/* Dayanak — KpiCard.dataSource ile ayni sozlesme */}
+                          {alert.dataSource && (
+                            <p className="mt-1.5 font-mono text-xs text-surface-400">
+                              {alert.dataSource}
+                            </p>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-2 flex-shrink-0">

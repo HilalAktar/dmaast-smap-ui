@@ -21,7 +21,6 @@ import {
   Building2,
 } from 'lucide-react';
 import Header from '../components/layout/Header';
-import { useLanguage } from '../contexts/LanguageContext';
 import { useRole } from '../contexts/RoleContext';
 
 interface Resource {
@@ -272,7 +271,6 @@ const helpIconSections = [
 ];
 
 export default function HelpCenter() {
-  const { t } = useLanguage();
   const { role } = useRole();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'resources' | 'faq' | 'troubleshooting' | 'contact'>('resources');
