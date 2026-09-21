@@ -45,12 +45,12 @@ export const APP_PAGES: AppPage[] = [
   { key: 'manufacturing', path: '/digital-twin/manufacturing', label: 'Manufacturing DT', group: 'Digital Twins', layoutId: 'manufacturing' },
   { key: 'logistics', path: '/digital-twin/logistics', label: 'Logistics DT', group: 'Digital Twins', layoutId: 'logistics' },
   { key: 'product', path: '/digital-twin/product', label: 'Product DT', group: 'Digital Twins', layoutId: 'product' },
-  { key: 'value-chain-sim', path: '/digital-twin/value-chain-sim', label: 'Value Chain Simulation', group: 'Digital Twins', planned: true },
-  { key: 'manufacturing-sim', path: '/digital-twin/manufacturing-sim', label: 'Manufacturing Simulation', group: 'Digital Twins', planned: true },
+  { key: 'value-chain-sim', path: '/digital-twin/value-chain-sim', label: 'Value Chain Simulation', group: 'Digital Twins' },
+  { key: 'manufacturing-sim', path: '/digital-twin/manufacturing-sim', label: 'Manufacturing Simulation', group: 'Digital Twins' },
 
-  { key: 'mo-dss', path: '/decision-support/mo-dss', label: 'MO-DSS', group: 'Decision Support', planned: true },
-  { key: 'sustainability', path: '/sustainability', label: 'Sustainability', group: 'Decision Support', planned: true },
-  { key: 'knowledge-graph', path: '/knowledge-graph', label: 'Decision Knowledge Graph', group: 'Decision Support', planned: true },
+  { key: 'mo-dss', path: '/decision-support/mo-dss', label: 'MO-DSS', group: 'Decision Support' },
+  { key: 'sustainability', path: '/sustainability', label: 'Sustainability', group: 'Decision Support' },
+  { key: 'knowledge-graph', path: '/knowledge-graph', label: 'Decision Knowledge Graph', group: 'Decision Support' },
 
   { key: 'alerts', path: '/alerts', label: 'Alert Center', group: 'Support' },
   { key: 'terminology', path: '/terminology', label: 'Terminology Dictionary', group: 'Support' },

@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dmaast.local/contracts/SimulationResultV1.schema.json",
+  "title": "SimulationResultV1",
+  "description": "Versioned, source-agnostic data contract for a single DMAAST value-chain digital-twin demo simulation run. Single source of truth for both the KAM and JPB twins and for the smap UI. The `result` payload is the normalized form of the twin's `/api/demo/simulate` response (which the twin emits as separate top-level `*_events` arrays + `hierarchy_summary`); the SimSource adapter re-shapes it into this envelope. Twin-specific / product-specific asymmetry (KAM single-product vs JPB multi-product catalog, extra planning/shock knobs, extra event columns, per-product dynamic timeseries columns) is carried in the OPTIONAL `config` block and via open object shapes (additionalProperties:true) on kpis / event rows / hierarchy. The normalized top-level shape (kpis, timeseries, events, hierarchy) is symmetric across both twins.",
+  "type": "object",
+  "required": ["contract_version", "schema", "company", "result"],
+  "additionalProperties": false,
+  "properties": {
+    "contract_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "SemVer of this contract. Consumers MUST check the major version."
+    },
+    "schema": {
+      "type": "string",
+      "const": "SimulationResultV1"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC ISO-8601 timestamp the artifact was produced (pre-generated source only)."
+    },
+    "source": {
+      "type": "string",
+      "enum": ["pre-generated", "live"],
+      "description": "Provenance. 'pre-generated' = static artifact exported from a one-shot twin run (phase B). 'live' = fetched from the twin's POST /api/demo/simulate at runtime (phase A, future). The SimSource adapter interface is identical for both."
+    },
+    "company": {
+      "type": "string",
+      "enum": ["kam", "jpb"],
+      "description": "Role/use-case key. Matches smap CompanyContext.Company; drives role-based ('kam'|'jpb') artifact loading."
+    },
+    "config": {
+      "type": "object",
+      "description": "OPTIONAL. The resolved run configuration. Present in artifacts for traceability and to carry KAM/JPB asymmetry without changing the symmetric result shape. Absent/partial `config` is valid.",
+      "additionalProperties": true,
+      "properties": {
+        "product_id": {
+          "type": "string",
+          "description": "Finished-good id. KAM: fixed 021XBXXXXXXF04. JPB: catalog base product (pilot ST5253-06 when config_code is null)."
+        },
+        "config_code": {
+          "type": ["string", "null"],
+          "description": "JPB catalog selector; null for the pilot/default product and always null for KAM (single product)."
+        },
+        "supports_configurations": {
+          "type": "boolean",
+          "description": "true only for JPB (LULYLOK multi-product catalog). false for KAM. Drives whether a product picker is meaningful."
+        },
+        "horizon_days": { "type": "number" },
+        "seed": { "type": "integer" },
+        "demand_mode": {
+          "type": "string",
+          "description": "One of family_proxy | exact_f04 | family_scaled. Twin default differs: KAM family_scaled, JPB family_proxy."
+        },
+        "f04_share": { "type": "number" },
+        "planning": {
+          "type": "object",
+          "description": "PlanningConfig used. Core keys shared by both twins; JPB adds max_batch_qty, ship_complete, reorder_on_position, leaf_coverage_factor, sa_coverage_factor.",
+          "additionalProperties": true
+        },
+        "shocks": {
+          "type": "object",
+          "description": "Global ShockConfig used (all zero for the baseline default scenario). JPB adds Subcontract_Lead_Time_pct, Rework_pct, Quality_Hold_pct.",
+          "additionalProperties": true
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "description": "The normalized simulation output. Symmetric across twins at this level.",
+      "required": ["kpis", "timeseries", "events", "hierarchy"],
+      "additionalProperties": false,
+      "properties": {
+        "kpis": {
+          "type": "object",
+          "description": "Scalar summary metrics. Open shape (twins may add keys, e.g. JPB adds `company`). Core keys below are present in both twins.",
+          "additionalProperties": true,
+          "required": [
+            "product_id", "horizon_days", "total_demand_qty", "shipped_qty",
+            "service_level", "avg_inventory", "ending_inventory",
+            "cumulative_produced", "cumulative_shipped",
+            "production_batches_completed", "shipments_completed_allocations",
+            "n_assembly_levels", "sub_assembly_ids"
+          ],
+          "properties": {
+            "product_id": { "type": "string" },
+            "horizon_days": { "type": "number" },
+            "total_demand_qty": { "type": "number" },
+            "shipped_qty": { "type": "number" },
+            "service_level": { "type": "number", "description": "shipped_qty / total_demand_qty (1.0 if no demand)." },
+            "avg_inventory": { "type": "number" },
+            "stockout_time_days": { "type": "number" },
+            "below_safety_stock_time_days": { "type": "number" },
+            "avg_total_lead_days": { "type": "number" },
+            "p90_total_lead_days": { "type": "number" },
+            "avg_production_queue_wait_days": { "type": "number" },
+            "production_batches_completed": { "type": "integer" },
+            "shipments_completed_allocations": { "type": "integer" },
+            "ending_backlog_qty": { "type": "number" },
+            "ending_inventory": { "type": "number" },
+            "cumulative_produced": { "type": "number" },
+            "cumulative_shipped": { "type": "number" },
+            "n_assembly_levels": { "type": "integer" },
+            "sub_assembly_ids": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "timeseries": {
+          "type": "array",
+          "description": "Inventory snapshot per tick (0.25-day step). Besides the fixed columns, each row carries one dynamic `inv_<subAssemblyId>` column per sub-assembly (product-specific — this is why additionalProperties is true).",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["time_days", "inventory", "backlog_qty", "safety_stock", "stockout_flag"],
+            "properties": {
+              "time_days": { "type": "number" },
+              "inventory": { "type": "number" },
+              "raw_inventory": { "type": "number" },
+              "backlog_qty": { "type": "number" },
+              "safety_stock": { "type": "number" },
+              "stockout_flag": { "type": "integer", "enum": [0, 1] },
+              "cumulative_produced": { "type": "number" },
+              "cumulative_shipped": { "type": "number" },
+              "cumulative_demand": { "type": "number" }
+            }
+          }
+        },
+        "events": {
+          "type": "object",
+          "description": "Discrete-event logs grouped by kind. Maps the twin's separate top-level arrays: demand_events, production_events, shipment_events, level_events, replenishment_events. Rows are open objects — JPB carries extra columns (shipment: order_qty/is_partial; replenishment: trigger/quality_hold_days) and KAM assembly-phase level rows carry extra columns.",
+          "required": ["demand", "production", "shipment", "level", "replenishment"],
+          "additionalProperties": false,
+          "properties": {
+            "demand": {
+              "type": "array",
+              "items": { "type": "object", "additionalProperties": true, "required": ["t", "sales_qty"] }
+            },
+            "production": {
+              "type": "array",
+              "items": { "type": "object", "additionalProperties": true }
+            },
+            "shipment": {
+              "type": "array",
+              "items": { "type": "object", "additionalProperties": true }
+            },
+            "level": {
+              "type": "array",
+              "description": "Per-level procurement/assembly events. `phase` is 'procurement' | 'assembly'. `parts_detail` is a nested array of component rows.",
+              "items": { "type": "object", "additionalProperties": true, "required": ["batch_id", "phase", "level"] }
+            },
+            "replenishment": {
+              "type": "array",
+              "items": { "type": "object", "additionalProperties": true }
+            }
+          }
+        },
+        "hierarchy": {
+          "type": "object",
+          "description": "BOM / value-chain tree summary (the twin's `hierarchy_summary`). Drives the hierarchy tab.",
+          "additionalProperties": true,
+          "required": ["assembly_plan_order", "levels", "sub_assembly_ids", "by_part"],
+          "properties": {
+            "assembly_plan_order": { "type": "array", "items": { "type": "string" }, "description": "Parent part numbers in bottom-up assembly order." },
+            "levels": { "type": "object", "description": "Per-parent-part level summary keyed by part number.", "additionalProperties": true },
+            "sub_assembly_ids": { "type": "array", "items": { "type": "string" } },
+            "by_part": { "type": "object", "description": "Per-part aggregates (produced/consumed/ending_inventory/...) keyed by part number, for node badges.", "additionalProperties": true }
+          }
+        }
+      }
+    }
+  }
+}
