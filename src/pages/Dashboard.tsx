@@ -17,7 +17,6 @@ import FilterBar from '../components/shared/FilterBar';
 import KpiCard from '../components/shared/KpiCard';
 import AlertCard from '../components/shared/AlertCard';
 import { TaskListWidget } from '../components/shared/HITLValidation';
-import UxSurvey from '../components/shared/UxSurvey';
 import { productionTrendData, hitlValidationTasks } from '../data/mockData';
 import { getWidgetKpis } from '../data/pageLayouts';
 import { getCompanyAlerts } from '../data/alerts';
@@ -255,9 +254,6 @@ export default function Dashboard() {
             </div>
           </div>
         );
-
-      case 'ux-survey':
-        return <UxSurvey />;
 
       case 'hitl-tasks':
         return (

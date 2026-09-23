@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ClipboardList, Check, RotateCcw, CalendarClock } from 'lucide-react';
+import { Check, RotateCcw, CalendarClock } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useRole } from '../../contexts/RoleContext';
 import { tx } from '../../i18n/tx';
@@ -92,15 +92,8 @@ export default function UxSurvey() {
   };
 
   return (
-    <section aria-labelledby="ux-survey-heading" className="flex flex-col h-full min-h-0">
-      <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
-        <h3
-          id="ux-survey-heading"
-          className="font-semibold text-surface-900 flex items-center gap-2"
-        >
-          <ClipboardList className="w-4 h-4 text-primary-600" aria-hidden="true" />
-          {tx(t, 'survey.title', 'User Experience Survey')}
-        </h3>
+    <section aria-label={tx(t, 'survey.title', 'User Experience Survey')} className="flex flex-col h-full min-h-0">
+      <div className="flex items-center justify-end mb-3">
         <MockDataBadge />
       </div>
 

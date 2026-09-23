@@ -98,11 +98,9 @@ export const PAGE_LAYOUTS: Record<PageId, PageLayoutConfig> = {
       //   stogu). Widget SILINMEDI — Isil'in tarifiyle "survey" olarak yeniden
       //   kurulacak; tasarim gelince bu satir geri acilir.
       // { id: 'hitl-tasks', title: 'Validation Tasks', type: 'widget' },
-      // GERI ACILDI 2026-09-23 (Isil): gorev listesi yerine ANKET olarak kuruldu.
-      //   Icerik uydurulmus gorev degil; SUS (10 madde, standart ifade) + CSAT
-      //   arayuz icinden uygulanir, PSSUQ/UEQ protokolde beyan edilip T5.2'ye
-      //   isaretlidir. MS8 SO1.3 KPI'sinin (SUS/PSSUQ/CSAT/UEQ) arayuz karsiligi.
-      { id: 'ux-survey', title: 'User Experience Survey', type: 'widget' },
+      // ANKET BURADA DEGIL (Isil karari 2026-09-23): kart olarak dashboard'i
+      //   tikiyordu. Basliktaki dil secicinin yanindan acilan bir dugmeye tasindi
+      //   (Header.tsx) — her sayfadan erisilebilir olmasi da amaclandi.
       // Ikincil serit: KAM'da olculebilen, JPB'de kurulamayan iki kalem.
       //   inventory-turnover -> KAM 'Total Inventory Value' 1.380 satir %100 dolu,
       //     toplam 85.300.998. DIKKAT: bu bir DEGER'dir, DEVIR HIZI degil —
@@ -114,12 +112,12 @@ export const PAGE_LAYOUTS: Record<PageId, PageLayoutConfig> = {
         kpiIds: ['inventory-turnover', 'cost-efficiency'] },
     ],
     roleDefaults: {
-      manager: ['quick-stats', 'kpi-primary', 'production-trend', 'alerts', 'kpi-secondary', 'ux-survey'],
-      engineer: ['quick-stats', 'kpi-primary', 'production-trend', 'kpi-secondary', 'ux-survey'],
-      operator: ['quick-stats', 'alerts', 'ux-survey'],
-      admin: ['quick-stats', 'kpi-primary', 'production-trend', 'alerts', 'kpi-secondary', 'ux-survey'],
+      manager: ['quick-stats', 'kpi-primary', 'production-trend', 'alerts', 'kpi-secondary'],
+      engineer: ['quick-stats', 'kpi-primary', 'production-trend', 'kpi-secondary'],
+      operator: ['quick-stats', 'alerts'],
+      admin: ['quick-stats', 'kpi-primary', 'production-trend', 'alerts', 'kpi-secondary'],
       developer: ['quick-stats', 'kpi-primary', 'production-trend'],
-      superuser: ['quick-stats', 'kpi-primary', 'production-trend', 'alerts', 'kpi-secondary', 'ux-survey'],
+      superuser: ['quick-stats', 'kpi-primary', 'production-trend', 'alerts', 'kpi-secondary'],
     },
   },
   'value-chain': {

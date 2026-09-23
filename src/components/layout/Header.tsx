@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Bell, Search, ChevronDown, RefreshCw, Globe2, ShieldCheck } from 'lucide-react';
+import { Bell, Search, ChevronDown, RefreshCw, Globe2, ShieldCheck, ClipboardList, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getCompanyAlerts } from '../../data/alerts';
 import {
@@ -10,8 +10,10 @@ import {
 } from '../../contexts/CompanyContext';
 import { useAuth, isGlobalAdmin } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { tx } from '../../i18n/tx';
 import SystemStatus from '../shared/SystemStatus';
 import Tooltip from '../shared/Tooltip';
+import UxSurvey from '../shared/UxSurvey';
 
 interface HeaderProps {
   title: string;
@@ -54,9 +56,12 @@ export default function Header({ title, subtitle }: HeaderProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const [showSurvey, setShowSurvey] = useState(false);
+
   const currentLanguageLabel = languages.find(l => l.value === language)?.label || 'English';
 
   return (
+    <>
     <header className="bg-white border-b border-surface-200 px-4 lg:px-6 py-4">
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0">
@@ -151,6 +156,19 @@ export default function Header({ title, subtitle }: HeaderProps) {
             )}
           </div>
 
+          {/* Anket — Isil karari 2026-09-23: dashboard kartindan basliga tasindi,
+              dil secicinin yaninda, her sayfadan erisilebilir. */}
+          <Tooltip content={tx(t, 'survey.open', 'User experience survey')} position="bottom">
+            <button
+              onClick={() => setShowSurvey(true)}
+              className="p-2 text-surface-500 hover:text-surface-700 hover:bg-surface-100 rounded-lg transition-colors"
+              aria-label={tx(t, 'survey.open', 'User experience survey')}
+              aria-haspopup="dialog"
+            >
+              <ClipboardList className="w-5 h-5" />
+            </button>
+          </Tooltip>
+
           <Tooltip content={t('header.refresh')} position="bottom">
             <button
               className="p-2 text-surface-500 hover:text-surface-700 hover:bg-surface-100 rounded-lg transition-colors"
@@ -177,5 +195,38 @@ export default function Header({ title, subtitle }: HeaderProps) {
         </div>
       </div>
     </header>
+
+    {showSurvey && (
+      <div
+        className="fixed inset-0 z-[60] flex items-center justify-center bg-surface-900/50 backdrop-blur-sm p-4"
+        onClick={(e) => { if (e.target === e.currentTarget) setShowSurvey(false); }}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={tx(t, 'survey.title', 'User Experience Survey')}
+          className="relative max-w-2xl w-full max-h-[90vh] flex flex-col bg-white rounded-xl shadow-2xl overflow-hidden"
+        >
+          <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-surface-200 flex-shrink-0">
+            <h3 className="text-lg font-semibold text-surface-900">
+              {tx(t, 'survey.title', 'User Experience Survey')}
+            </h3>
+            <Tooltip content={tx(t, 'common.close', 'Close')}>
+              <button
+                onClick={() => setShowSurvey(false)}
+                className="p-1.5 text-surface-400 hover:text-surface-600 hover:bg-surface-100 rounded-lg transition-colors"
+                aria-label={tx(t, 'common.close', 'Close')}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </Tooltip>
+          </div>
+          <div className="overflow-y-auto flex-1 p-6 pt-4">
+            <UxSurvey />
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
