@@ -16,12 +16,16 @@ const PAGES = {
   'src/pages/decision-support/MODSS.tsx': 'MODSS_MOCK_PROVENANCE',
   'src/pages/digital-twin/SustainabilityDT.tsx': 'SUSTAINABILITY_MOCK_PROVENANCE',
   'src/pages/DecisionKnowledgeGraph.tsx': 'DKG_MOCK_PROVENANCE',
+  // 2026-10-12: Value Chain Simulation = 1:1 twin UI on a mock engine (no backend)
+  'src/pages/decision-support/ValueChainSim.tsx': 'VCSIM_MOCK_PROVENANCE',
 };
 const MOCKS = [
   'src/data/mock/manufacturingSimMock.ts',
   'src/data/mock/modssMock.ts',
   'src/data/mock/sustainabilityMock.ts',
   'src/data/mock/knowledgeGraphMock.ts',
+  'src/data/mock/valueChainSimMock.ts',
+  'src/data/mock/valueChainHierarchy.ts',
 ];
 
 let passed = 0;
@@ -47,11 +51,27 @@ test('pages: each page renders MockDataBadge and MockDataNotice with its provena
 });
 
 test('mocks: every mock module exports a kind=mock provenance constant', () => {
-  for (const rel of MOCKS) {
+  // valueChainHierarchy.ts is a structure-only helper module; provenance lives in valueChainSimMock.ts.
+  for (const rel of MOCKS.filter((m) => !m.endsWith('valueChainHierarchy.ts'))) {
     const src = read(rel);
     assert.ok(/export const \w+_MOCK_PROVENANCE\s*=/.test(src), `${rel} missing *_MOCK_PROVENANCE`);
     assert.ok(/kind:\s*'mock'/.test(src), `${rel} missing kind: 'mock'`);
   }
+});
+
+test('vcsim: page and twin components perform no network or storage access', () => {
+  const bad = /(fetch\(|axios|XMLHttpRequest|localStorage|sessionStorage|import\.meta\.env|process\.env|https?:\/\/)/i;
+  const dir = path.join(APP, 'src/components/value-chain-sim');
+  const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
+  const files = walk(dir).filter((f) => /\.(ts|tsx)$/.test(f));
+  assert.ok(files.length >= 15, 'twin component tree present');
+  for (const f of files) {
+    read(path.relative(APP, f)).split(/\r?\n/).forEach((line, i) => {
+      assert.ok(!bad.test(line), `${path.relative(APP, f)}:${i + 1} suspicious content: ${line.trim().slice(0, 80)}`);
+    });
+  }
+  const app = read('src/App.tsx');
+  assert.ok(/path="value-chain-sim"/.test(app) && app.includes('<ValueChainSim />'), 'App.tsx must still mount ValueChainSim');
 });
 
 test('hygiene: no secrets, credentials, URLs or live-data access in mocks and pages', () => {

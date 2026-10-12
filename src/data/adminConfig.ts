@@ -46,7 +46,7 @@ export const APP_PAGES: AppPage[] = [
   { key: 'logistics', path: '/digital-twin/logistics', label: 'Logistics DT', group: 'Digital Twins', layoutId: 'logistics' },
   { key: 'product', path: '/digital-twin/product', label: 'Product DT', group: 'Digital Twins', layoutId: 'product' },
   // 2026-09-17 (kullanıcı kararı, Asrınalp Şahin): "planned" işaretleri kaldırıldı — bu sayfalar artık
-  // mock içerik taşır (src/data/mock/*). value-chain-sim zaten pre-generated artifact ile doluydu.
+  // mock içerik taşır (src/data/mock/*). value-chain-sim 2026-10-12'den itibaren twin arayüzünün birebir kopyası + mock motor (src/data/mock/valueChainSimMock.ts), backend yok.
   // Mock sayfalarin kart duzeni pageLayouts kaydina baglandi (layoutId) — admin paneli kartlari acip kapatabilir.
   { key: 'value-chain-sim', path: '/digital-twin/value-chain-sim', label: 'Value Chain Simulation', group: 'Digital Twins' },
   { key: 'manufacturing-sim', path: '/digital-twin/manufacturing-sim', label: 'Manufacturing Simulation', group: 'Digital Twins', layoutId: 'manufacturing-sim' },

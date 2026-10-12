@@ -11,6 +11,8 @@ deterministik ve açıkça işaretlenmiş mock veri taşır.
 | `modssMock.ts` | `/decision-support/mo-dss` | Firma bazlı amaç fonksiyonları, Pareto aday çözümler, ağırlıklı sıralama, mock öneriler |
 | `sustainabilityMock.ts` | `/sustainability` | Skor kartı KPI'ları (birim/pencere/hedef), aylık trend, süreç kırılımı, döngüsellik aksiyonları |
 | `knowledgeGraphMock.ts` | `/knowledge-graph` | Karar–KPI–senaryo–veri kaynağı–aktör düğümleri ve ilişkileri, SVG yerleşim koordinatları |
+| `valueChainSimMock.ts` | `/digital-twin/value-chain-sim` | **(2026-10-12)** Value Chain Digital Twin arayüzünün birebir kopyası için mock motor: `getMockDemoMeta()` (= twin `GET /api/demo/metadata`) ve `runMockSimulation()` (= twin `POST /api/demo/simulate`); aynı JSON sözleşmesi, sentetik/deterministik değerler |
+| `valueChainHierarchy.ts` + `valueChainHierarchyData.ts` | `/digital-twin/value-chain-sim` | Maskeli demo ürününün (021XBXXXXXXF04) BOM **yapısı** (twin `hierarchyData.json`'dan üretilmiş) ve ağaç dönüştürücüsü; stok/süre/fiyat içermez |
 
 Kurallar:
 
@@ -24,4 +26,11 @@ Kurallar:
 - Canlı kaynağa geçiş: mock modül → SMAP backend API (sahibi `dmaast-smap-backend-agent`).
   Motor/sıralama hesapları tarayıcıda yalnızca mock aşaması için yapılır.
 
-Doğrulama: `node tests/mock-modules.verify.cjs`
+Value Chain Simulation notu (Asrınalp Şahin, 2026-10-12): sayfa, twin frontend'inin
+(`dmaast-value-chain-digital-twin/frontend`) `.vcdt` kapsamına alınmış birebir kopyasıdır
+(`src/components/value-chain-sim/`). Backend yoktur; "Run Simulation" her basışta mock
+motoru gün 0'dan hedef ufka deterministik olarak yeniden koşturur (twin'in Step Forward
+semantiği). Önceki `data/sim/` pre-generated artifact akışı bu sayfa tarafından artık
+kullanılmaz.
+
+Doğrulama: `node tests/mock-modules.verify.cjs` ve `node tests/qa-mock-pages.verify.cjs`

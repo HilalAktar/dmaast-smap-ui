@@ -33,6 +33,7 @@ const mfg = bundle('src/data/mock/manufacturingSimMock.ts');
 const modss = bundle('src/data/mock/modssMock.ts');
 const sust = bundle('src/data/mock/sustainabilityMock.ts');
 const dkg = bundle('src/data/mock/knowledgeGraphMock.ts');
+const vcs = bundle('src/data/mock/valueChainSimMock.ts');
 
 const COMPANIES = ['kam', 'jpb'];
 let passed = 0;
@@ -49,7 +50,7 @@ function test(name, fn) {
 
 // ---------------------------------------------------------------- provenance
 test('every mock module declares kind=mock provenance', () => {
-  for (const p of [mfg.MFG_SIM_MOCK_PROVENANCE, modss.MODSS_MOCK_PROVENANCE, sust.SUSTAINABILITY_MOCK_PROVENANCE, dkg.DKG_MOCK_PROVENANCE]) {
+  for (const p of [mfg.MFG_SIM_MOCK_PROVENANCE, modss.MODSS_MOCK_PROVENANCE, sust.SUSTAINABILITY_MOCK_PROVENANCE, dkg.DKG_MOCK_PROVENANCE, vcs.VCSIM_MOCK_PROVENANCE]) {
     assert.strictEqual(p.kind, 'mock');
     assert.ok(p.note.length > 20);
   }
@@ -169,6 +170,91 @@ test('dkg: edges reference existing nodes, ids are unique, layout coords in rang
     const isolated = m.nodes.filter((n) => dkg.getNeighbours(m, n.id).length === 0);
     assert.strictEqual(isolated.length, 0, `${company}: isolated nodes ${isolated.map((n) => n.id).join(',')}`);
   }
+});
+
+// ------------------------------------------------- value chain sim (twin 1:1)
+const VCS_PLANNING = {
+  safety_stock: 30, min_lot_size: 30, planning_method: 'base_stock', period_order_qty_days: 30,
+  review_interval_days: 1, production_capacity: 2, outbound_capacity: 1, max_outstanding_production_batches: 50,
+};
+const vcsRun = (horizon, shocks = {}, seed = 42, nodeShocks = {}) =>
+  vcs.runMockSimulation({ horizon_days: horizon, seed, planning: VCS_PLANNING, shocks, node_shocks: nodeShocks });
+
+test('vcsim: metadata mirrors the twin /api/demo/metadata contract for the masked demo product', () => {
+  const meta = vcs.getMockDemoMeta();
+  assert.strictEqual(meta.product.part_no, '021XBXXXXXXF04');
+  assert.strictEqual(meta.product.total_components, 87);
+  assert.deepStrictEqual(meta.product.sub_assemblies, ['5401021', '55501572', '55501649', '5962204']);
+  assert.strictEqual(meta.bom_tree.length, meta.product.total_bom_relations);
+  assert.ok(meta.bom_tree.length >= 99, 'all BOM relations present');
+  for (const row of meta.bom_tree) {
+    assert.ok(['FinishedGood', 'SubAssembly', 'Component', 'Expense'].includes(row.entity_type), `bad entity_type ${row.entity_type}`);
+    assert.ok(row.qty_per_assembly > 0 && row.available_qty >= 0);
+  }
+  assert.strictEqual(Object.keys(meta.supplier_index).length, 87);
+  assert.ok(meta.suppliers_count >= 87);
+  assert.strictEqual(meta.routing_operations.length, 12);
+  for (const s of Object.values(meta.stock_by_part)) assert.ok(s.available_qty >= 0 && s.uom && s.value_currency);
+  for (const k of ['supplier_lead_time_days', 'arrival_delay_days', 'production_duration_days', 'ship_delay_days']) {
+    assert.ok(Number.isFinite(meta.distribution_stats[k].mean), `distribution_stats.${k} missing`);
+  }
+});
+
+test('vcsim: engine is deterministic per seed and horizon-prefix consistent (Step Forward replay)', () => {
+  const a = vcsRun(30);
+  const b = vcsRun(30);
+  const c = vcsRun(30, {}, 7);
+  assert.deepStrictEqual(a.kpis, b.kpis);
+  assert.deepStrictEqual(a.demand_events, b.demand_events);
+  assert.notDeepStrictEqual(a.demand_events, c.demand_events);
+  const short = vcsRun(7);
+  assert.ok(short.demand_events.length > 0);
+  assert.deepStrictEqual(a.demand_events.slice(0, short.demand_events.length), short.demand_events, 'first 7 days must replay identically');
+  assert.deepStrictEqual(a.timeseries.slice(0, short.timeseries.length), short.timeseries);
+});
+
+test('vcsim: results are bounded and shaped like the twin /api/demo/simulate contract', () => {
+  const r = vcsRun(60);
+  const k = r.kpis;
+  assert.strictEqual(k.horizon_days, 60);
+  assert.strictEqual(k.product_id, '021XBXXXXXXF04');
+  assert.ok(k.service_level >= 0 && k.service_level <= 1);
+  for (const [key, v] of Object.entries(k)) if (typeof v === 'number') assert.ok(Number.isFinite(v), `kpi ${key} not finite`);
+  assert.strictEqual(r.timeseries.length, 240);
+  assert.strictEqual(r.timeseries[0].time_days, 0);
+  assert.ok(r.demand_events.length > 0 && r.production_events.length > 0 && r.shipment_events.length > 0);
+  assert.ok(r.level_events.some((e) => e.phase === 'procurement') && r.level_events.some((e) => e.phase === 'assembly'));
+  assert.deepStrictEqual(r.hierarchy_summary.assembly_plan_order.slice(-1), ['021XBXXXXXXF04']);
+  assert.strictEqual(k.n_assembly_levels, r.hierarchy_summary.assembly_plan_order.length);
+  assert.ok(Object.keys(r.hierarchy_summary.by_part).length >= 92, 'every part gets a live aggregate');
+  const produced = r.production_events.reduce((s, e) => s + e.finished_output_qty, 0);
+  assert.ok(Math.abs(k.cumulative_produced - produced) < 0.05, 'cumulative production must equal batch output');
+  assert.ok(Math.abs(k.shipped_qty - r.shipment_events.reduce((s, e) => s + e.alloc_qty, 0)) < 0.05);
+  for (const e of r.shipment_events) {
+    assert.ok(e.delivery_time <= 60 && e.order_time <= e.dispatch_time && e.dispatch_time <= e.delivery_time);
+  }
+  for (const e of r.production_events) assert.ok(e.t_release <= e.t_output && e.t_output <= 60 && e.completion_rate > 0 && e.completion_rate <= 1);
+  for (const p of Object.values(r.hierarchy_summary.by_part)) assert.ok(p.ending_inventory >= -1e-6, `${p.part_no} negative inventory`);
+});
+
+test('vcsim: shocks move KPIs in the expected direction and compose additively', () => {
+  const base = vcsRun(90).kpis;
+  const demand = vcsRun(90, { Sales_Qty_pct: 50 }).kpis;
+  assert.ok(demand.total_demand_qty > base.total_demand_qty, 'sales shock must raise demand');
+  const slow = vcsRun(90, { Production_Duration_Days_pct: 200 });
+  assert.ok(
+    slow.kpis.service_level < base.service_level || slow.kpis.ending_backlog_qty > base.ending_backlog_qty,
+    'slower production must hurt service or build backlog',
+  );
+  const ship = vcsRun(90, { Ship_Delay_Days_pct: 300 }).kpis;
+  assert.ok(ship.avg_total_lead_days > base.avg_total_lead_days, 'ship delay must lengthen order-to-delivery lead time');
+  const node = vcsRun(90, {}, 42, { '021XBXXXXXXF04': { scope: 'subtree', values: { Production_Duration_Days_pct: 200 } } });
+  assert.deepStrictEqual(node.kpis, slow.kpis, 'a subtree shock on the root must equal the same global production shock');
+  const excess = vcsRun(90, { Order_Quantity_pct: 100 });
+  const excessQty = excess.level_events
+    .filter((e) => e.phase === 'procurement')
+    .reduce((s, e) => s + e.parts_detail.reduce((ss, p) => ss + (p.qty_excess_to_stock || 0), 0), 0);
+  assert.ok(excessQty > 0, 'order quantity shock must leave excess in the warehouse');
 });
 
 console.log(`\n${passed} test(s) passed${process.exitCode ? ', with failures' : ''}.`);
